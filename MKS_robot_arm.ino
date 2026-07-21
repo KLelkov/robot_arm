@@ -61,10 +61,10 @@ void setup() {
   
   // Initialize Hardware Serial 1 for TMC2209 UART
   // ESP32-S3 allows mapping Serial1 to any pins. We use GPIO 18 for RX and TX.
-  //Serial1.begin(115200, SERIAL_8N1, RX_PIN, TX_PIN);
-  Serial1.begin(115200, SERIAL_8N1, 21, 22);
-  pinMode(RX_PIN, OUTPUT);
-  pinMode(TX_PIN, OUTPUT);
+  Serial1.begin(115200, SERIAL_8N1, RX_PIN, TX_PIN);
+  //Serial1.begin(115200, SERIAL_8N1, 21, 22);
+  //pinMode(RX_PIN, OUTPUT);
+  //pinMode(TX_PIN, OUTPUT);
   pinMode(pin_LIMIT[2], INPUT_PULLUP);
   //digitalWrite(TX_PIN, HIGH);
   //digitalWrite(RX_PIN, HIGH);
