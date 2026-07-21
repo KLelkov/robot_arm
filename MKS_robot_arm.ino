@@ -34,7 +34,7 @@ enum HomingState {
   HOMING_COMPLETE
 };
 
-//void runSimultaneousHoming();
+void runSimultaneousHoming();
 
 void setup() {
   Serial.begin(115200);
@@ -56,190 +56,78 @@ void setup() {
       uint32_t speed_hz = 16 * STEPS_PER_ROTATION;
       steppers[i]->setSpeedInHz(speed_hz);       
       steppers[i]->setAcceleration(speed_hz * 4);
-      Serial.print("TMC2209 and stepper ");
-      Serial.print(i);
-      Serial.println(" are initialized!");
+      Serial.print("TMC2209 and stepper "); Serial.print(i); Serial.println(" are initialized!");
     }
     else
     {
-      Serial.print("TMC2209 for stepper ");
-      Serial.print(i);
-      Serial.println(" configuration error!");
+      Serial.print("TMC2209 for stepper "); Serial.print(i); Serial.println(" configuration error!");
     }
   }
   
-  runHomingSequence_Z();
-  Serial.println("Z axis is done!");
-
-  runHomingSequence_X();
-  Serial.println("X axis is done!");
-
-  runHomingSequence_Y();
-  Serial.println("Y axis is done!");
-
-  runHomingSequence_A();
-  Serial.println("A axis is done!");
+  // Run simultaneous homing for all axes
+  runSimultaneousHoming();
 }
 
-unsigned long lastPrintTime = 0; // Timer variable
 
 void loop() {
 
 }
 
-// --- HOMING FUNCTION ---
-void runHomingSequence_Z() {
-  Serial.println("Homing started...");
 
-  // 1. Set homing speed
-  steppers[2]->setSpeedInHz(HOMING_SPEED);
+// --- SIMULTANEOUS HOMING FUNCTION ---
+void runSimultaneousHoming() {
+  Serial.println("Simultaneous homing sequence started...");
 
-  // 2. Start moving continuously in the homing direction
-  if (homingDirs[2] == 1) {
-    steppers[2]->runForward();
-  } else {
-    steppers[2]->runBackward();
+  HomingState axisState[NUM_MOTORS];
+
+  // Start all motors moving in their homing directions
+  for (int i = 0; i < NUM_MOTORS; i++) {
+    if (steppers[i]) {
+      steppers[i]->setSpeedInHz(HOMING_SPEED);
+      
+      if (homingDirs[i] == 1) {
+        steppers[i]->runForward();
+      } else {
+        steppers[i]->runBackward();
+      }
+      axisState[i] = SEEKING_SWITCH;
+    } else {
+      axisState[i] = HOMING_COMPLETE;  // skip if the motor is not connected
+    }
   }
 
-  // 3. Wait until the limit pin goes HIGH (switch is hit)
-  // (Since FastAccelStepper runs in the background, this loop is empty!)
-  while (digitalRead(pin_LIMIT[2]) == LOW) {
-    delay(1); // Yield to ESP32 OS to prevent watchdog triggers
+  // Monitor all switches (motors) at once
+  bool allHomed = false;
+  while (!allHomed) {
+    allHomed = true; // assume true, will be set to false if any motor is still homing
+
+    for (int i = 0; i < NUM_MOTORS; i++) {
+      if (axisState[i] == SEEKING_SWITCH) {
+        allHomed = false;  // if one is still moving, duh
+
+        // Check if the limit switch is triggered (HIGH means triggered)
+        if (digitalRead(pin_LIMIT[i]) == HIGH) { 
+          steppers[i]->forceStopAndNewPosition(steppers[i]->getCurrentPosition());
+          Serial.print("Axis "); Serial.print(i); Serial.println(" hit switch. Backing off...");
+          
+          // Start the backoff movement (opposite of homing direction)
+          steppers[i]->move(-BACKOFF_STEPS * homingDirs[i]);
+          axisState[i] = BACKING_OFF;
+        }
+      } 
+      else if (axisState[i] == BACKING_OFF) {
+        allHomed = false;
+
+        // Check if backoff movement is finished
+        if (!steppers[i]->isRunning()) {
+          steppers[i]->setCurrentPosition(0); // Set absolute zero
+          axisState[i] = HOMING_COMPLETE;
+          Serial.print("Axis "); Serial.print(i); Serial.println(" successfully homed to 0.");
+        }
+      }
+    }
+    delay(1); // Yield to ESP32 OS to prevent Watchdog Timer (WDT) resets (triggers)
   }
 
-  // 4. Switch hit! Stop immediately (no deceleration ramp)
-  steppers[2]->forceStopAndNewPosition(steppers[2]->getCurrentPosition());
-  Serial.println("Switch hit. Backing off...");
-  delay(200);
-
-  // 5. Move slightly away from the switch to release it
-  // (We use relative move: negative homing direction * backoff steps)
-  steppers[2]->move(-BACKOFF_STEPS * homingDirs[2]); 
-
-  // Wait until backoff movement is finished (blocking)
-  while (steppers[2]->isRunning()) {
-    delay(1);
-  }
-
-  // 6. Set this exact position as the absolute ZERO point
-  steppers[2]->setCurrentPosition(0);
-  Serial.println("System Homed. Position set to 0.");
-  delay(500);
-}
-
-void runHomingSequence_X() {
-  Serial.println("Homing started...");
-
-  // 1. Set homing speed
-  steppers[0]->setSpeedInHz(HOMING_SPEED);
-
-  // 2. Start moving continuously in the homing direction
-  if (homingDirs[0] == 1) {
-    steppers[0]->runForward();
-  } else {
-    steppers[0]->runBackward();
-  }
-
-  // 3. Wait until the limit pin goes HIGH (switch is hit)
-  // (Since FastAccelStepper runs in the background, this loop is empty!)
-  while (digitalRead(pin_LIMIT[0]) == LOW) {
-    delay(1); // Yield to ESP32 OS to prevent watchdog triggers
-  }
-
-  // 4. Switch hit! Stop immediately (no deceleration ramp)
-  steppers[0]->forceStopAndNewPosition(steppers[0]->getCurrentPosition());
-  Serial.println("Switch hit. Backing off...");
-  delay(200);
-
-  // 5. Move slightly away from the switch to release it
-  // (We use relative move: negative homing direction * backoff steps)
-  steppers[0]->move(-BACKOFF_STEPS * homingDirs[0]); 
-
-  // Wait until backoff movement is finished (blocking)
-  while (steppers[0]->isRunning()) {
-    delay(1);
-  }
-
-  // 6. Set this exact position as the absolute ZERO point
-  steppers[0]->setCurrentPosition(0);
-  Serial.println("System Homed. Position set to 0.");
-  delay(500);
-}
-
-void runHomingSequence_Y() {
-  Serial.println("Homing started...");
-
-  // 1. Set homing speed
-  steppers[1]->setSpeedInHz(HOMING_SPEED);
-
-  // 2. Start moving continuously in the homing direction
-  if (homingDirs[1] == 1) {
-    steppers[1]->runForward();
-  } else {
-    steppers[1]->runBackward();
-  }
-
-  // 3. Wait until the limit pin goes HIGH (switch is hit)
-  // (Since FastAccelStepper runs in the background, this loop is empty!)
-  while (digitalRead(pin_LIMIT[1]) == LOW) {
-    delay(1); // Yield to ESP32 OS to prevent watchdog triggers
-  }
-
-  // 4. Switch hit! Stop immediately (no deceleration ramp)
-  steppers[1]->forceStopAndNewPosition(steppers[1]->getCurrentPosition());
-  Serial.println("Switch hit. Backing off...");
-  delay(200);
-
-  // 5. Move slightly away from the switch to release it
-  // (We use relative move: negative homing direction * backoff steps)
-  steppers[1]->move(-BACKOFF_STEPS * homingDirs[1]); 
-
-  // Wait until backoff movement is finished (blocking)
-  while (steppers[1]->isRunning()) {
-    delay(1);
-  }
-
-  // 6. Set this exact position as the absolute ZERO point
-  steppers[1]->setCurrentPosition(0);
-  Serial.println("System Homed. Position set to 0.");
-  delay(500);
-}
-
-void runHomingSequence_A() {
-  Serial.println("Homing started...");
-
-  // 1. Set homing speed
-  steppers[3]->setSpeedInHz(HOMING_SPEED);
-
-  // 2. Start moving continuously in the homing direction
-  if (homingDirs[3] == 1) {
-    steppers[3]->runForward();
-  } else {
-    steppers[3]->runBackward();
-  }
-
-  // 3. Wait until the limit pin goes HIGH (switch is hit)
-  // (Since FastAccelStepper runs in the background, this loop is empty!)
-  while (digitalRead(pin_LIMIT[3]) == LOW) {
-    delay(1); // Yield to ESP32 OS to prevent watchdog triggers
-  }
-
-  // 4. Switch hit! Stop immediately (no deceleration ramp)
-  steppers[3]->forceStopAndNewPosition(steppers[3]->getCurrentPosition());
-  Serial.println("Switch hit. Backing off...");
-  delay(200);
-
-  // 5. Move slightly away from the switch to release it
-  // (We use relative move: negative homing direction * backoff steps)
-  steppers[3]->move(-BACKOFF_STEPS * homingDirs[3]); 
-
-  // Wait until backoff movement is finished (blocking)
-  while (steppers[3]->isRunning()) {
-    delay(1);
-  }
-
-  // 6. Set this exact position as the absolute ZERO point
-  steppers[3]->setCurrentPosition(0);
-  Serial.println("System Homed. Position set to 0.");
-  delay(500);
+  Serial.println("All axes successfully homed!");
 }
