@@ -1,6 +1,8 @@
 # Robot arm project
 
-The code version on the branch `master` is designed for Makerbase MKS DLC32 board (designed for 3d printers and CNC machines).
+The code version on the branch `master` is designed for Makerbase MKS DLC32 MAX board (designed for 3d printers and CNC machines).
+
+This is the exact version I've used: https://aliexpress.ru/item/1005008204547315.html
 
 ### MKS pinout
 
