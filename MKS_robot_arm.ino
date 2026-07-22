@@ -16,9 +16,9 @@ const float L1 = 235.0;  // length of Inner Arm (Y-axis link) in mm
 const float L2 = 140.0;  // length of Outer Arm (X-axis link) in mm
 
 // Transmission ratios
-const float GEAR_RATIO_A = 1.0;
-const float GEAR_RATIO_Z = 1.0; 
-const float GEAR_RATIO_Y = 1.0; 
+const float GEAR_RATIO_A = 19.1;
+const float GEAR_RATIO_Z = 0.125; 
+const float GEAR_RATIO_Y = 16.0; 
 const float GEAR_RATIO_X = 4.5;
 
 FastAccelStepper* steppers[NUM_MOTORS];
@@ -35,7 +35,7 @@ const int MOTOR_STEPS_PER_REV = 200;
 const int MICROSTEPS = 8;
 const int STEPS_PER_ROTATION = MOTOR_STEPS_PER_REV * MICROSTEPS;
 
-const int HOMING_SPEED = 1 * STEPS_PER_ROTATION;  // slow, safe speed for finding the switch
+const int HOMING_SPEED = 2 * STEPS_PER_ROTATION;  // slow, safe speed for finding the switch
 
 // Transition coefficients
 const float STEPS_PER_DEG_A = (STEPS_PER_ROTATION * GEAR_RATIO_A) / 360.0;
@@ -82,7 +82,7 @@ void setup()
       steppers[i]->enableOutputs();
       uint32_t speed_hz = 16 * STEPS_PER_ROTATION;
       steppers[i]->setSpeedInHz(speed_hz);       
-      steppers[i]->setAcceleration(speed_hz * 4);
+      steppers[i]->setAcceleration(speed_hz * 2);
       Serial.print("TMC2209 and stepper "); Serial.print(i); Serial.println(" are initialized!");
     }
     else
@@ -94,9 +94,12 @@ void setup()
   // Run simultaneous homing for all axes
   runSimultaneousHoming();
 
-  delay(4500);
-  steppers[0]->move(-180 * STEPS_PER_DEG_X * homingDirs[0]);
-  Serial.print("Stepper X outer limit: "); Serial.println(steppers[0]->getCurrentPosition());
+  delay(1500);
+  steppers[0]->move(-100 * STEPS_PER_DEG_X * homingDirs[0]);
+  //Serial.print("Stepper X outer limit: "); Serial.println(steppers[0]->getCurrentPosition());
+  delay(2500);
+  steppers[3]->setSpeedInHz(2 * STEPS_PER_ROTATION);
+  steppers[3]->move(-300 * STEPS_PER_DEG_A * homingDirs[3]);
 }
 
 
