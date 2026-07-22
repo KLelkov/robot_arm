@@ -46,7 +46,7 @@ const float STEPS_PER_DEG_X = (STEPS_PER_ROTATION * GEAR_RATIO_X) / 360.0;
 // Software limits
 const float MIN_HEIGHT = -100.0;  // mm
 const float MAX_HEIGHT = 0.0;  // mm
-const float MIN_REACH = abs(L1 - L2) - 5.0;  // mm
+const float MIN_REACH = abs(L1 - L2) + 5.0;  // mm
 const float MAX_REACH = abs(L1 + L2) - 5.0;  // mm
 const float MAX_PLANAR = 300.0;  // deg
 const float MIN_PLANAR = 0.0;  // deg
@@ -60,8 +60,10 @@ enum HomingState {
 
 void runSimultaneousHoming();
 bool moveToCylindrical(float target_z, float target_r, float target_theta_deg, int elbow_mode);
+bool send2motors(float target_x, float target_y, float target_z, float target_a);
 
-void setup() {
+void setup()
+{
   Serial.begin(115200);
   delay(500);
   Serial.println("Robot arm code initialized.");
@@ -98,13 +100,15 @@ void setup() {
 }
 
 
-void loop() {
+void loop()
+{
 
 }
 
 
 // --- SIMULTANEOUS HOMING FUNCTION ---
-void runSimultaneousHoming() {
+void runSimultaneousHoming()
+{
   Serial.println("Simultaneous homing sequence started...");
 
   HomingState axisState[NUM_MOTORS];
@@ -165,9 +169,9 @@ void runSimultaneousHoming() {
 // z: Height in mm
 // r: Extension radius in mm
 // theta: Planar angle in degrees
-bool moveToCylindrical(float target_z, float target_r, float target_theta_deg, int elbow_mode = 0) {
-  
-  // 1. Safety Check: Is the target within physical limits?
+bool moveToCylindrical(float target_z, float target_r, float target_theta_deg, int elbow_mode = 0)
+{
+  // Safety Check: Is the target within physical limits?
   if (target_z < MIN_HEIGHT || target_z > MAX_HEIGHT) {
     Serial.println("Error: Target Z is out of bounds!");
     return false;
@@ -211,32 +215,79 @@ bool moveToCylindrical(float target_z, float target_r, float target_theta_deg, i
   }
   float thetaA_deg = target_theta_deg + thetaY_deg; 
 
-  // 4. Convert Physical Units to Motor Steps
-  long steps_Z = target_z * STEPS_PER_MM_Z;
-  long steps_A = thetaA_deg * STEPS_PER_DEG_A;
-  long steps_Y = thetaY_deg * STEPS_PER_DEG_Y;
-  long steps_X = thetaX_deg * STEPS_PER_DEG_X;
-
-  // 5. Execute the Movement
+  // Execute the Movement
   Serial.print("Moving to -> Z: "); Serial.print(target_z);
   Serial.print("mm, R: "); Serial.print(target_r);
   Serial.print("mm, Angle: "); Serial.print(target_theta_deg); Serial.println("°");
-  Serial.print("Motor Targets -> A (Base): "); Serial.print(thetaA_deg);
-  Serial.print("°, Y (Shoulder): "); Serial.print(thetaY_deg);
-  Serial.print("°, X (Elbow): "); Serial.print(thetaX_deg); Serial.println("°");
+
+  if (send2motors(thetaX_deg, thetaY_deg, target_z, thetaA_deg))
+  {
+    Serial.println("Target position reached.");
+  }
+  else
+  {
+    Serial.println("Invalid position calculation.");
+  }
+
+  
+  return true;
+}
+
+bool send2motors(float target_x_deg, float target_y_deg, float target_z, float target_a_deg)
+{
+  float base_z = 300;  // mm, base Z position
+  float base_a_deg = 95.0;  // deg, base A position
+  float base_x_deg = 95.0;  // deg, base X position
+  float base_y_deg = 95.0;  // deg, base Y position
+  float height = target_z - base_z;  // target_z is calculated up from the bottom, while the real zero - up-most position
+  float planar_angle_deg = target_a_deg - base_a_deg;  // the real zero is the right-most position
+  float elbow_angle_deg = target_y_deg - base_y_deg;  // the real zero is the right-most position
+  float tip_angle_deg = target_x_deg - base_x_deg;  // the real zero is right-most position
+
+  if (height > 0 || height < base_z)
+  {
+    Serial.print("Invalid Z axis cmd (mm): "); Serial.println(height);
+    return false;
+  }
+  if (planar_angle_deg < 0 || planar_angle_deg > base_a_deg*2)
+  {
+    Serial.print("Invalid A axis cmd (deg): "); Serial.println(planar_angle_deg);
+    return false;
+  }
+  if (elbow_angle_deg < 0 || elbow_angle_deg > base_y_deg*2)
+  {
+    Serial.print("Invalid Y axis cmd (deg): "); Serial.println(elbow_angle_deg);
+    return false;
+  }
+  if (tip_angle_deg < 0 || tip_angle_deg > base_x_deg*2)
+  {
+    Serial.print("Invalid X axis cmd (deg): "); Serial.println(tip_angle_deg);
+    return false;
+  }
+
+  // Convert Physical Units to Motor Steps
+  long steps_Z = height * STEPS_PER_MM_Z;
+  long steps_A = planar_angle_deg * STEPS_PER_DEG_A;
+  long steps_Y = elbow_angle_deg * STEPS_PER_DEG_Y;
+  long steps_X = tip_angle_deg * STEPS_PER_DEG_X;
+
+  // Execute the Movement
+  Serial.print("Motor Targets -> Z (Height): "); Serial.print(height);
+  Serial.print("mm, A (Base): "); Serial.print(planar_angle_deg);
+  Serial.print("°, Y (Elbow): "); Serial.print(elbow_angle_deg);
+  Serial.print("°, X (Tip): "); Serial.print(tip_angle_deg); Serial.println("°");
 
   // Send targets to FastAccelStepper (non-blocking)
   steppers[2]->moveTo(steps_Z); // Z-axis
-  steppers[3]->moveTo(steps_A); // A-axis (Base)
-  steppers[1]->moveTo(steps_Y); // Y-axis (Shoulder)
-  steppers[0]->moveTo(steps_X); // X-axis (Elbow)
+  steppers[3]->moveTo(steps_A); // A-axis (Base/Shouler)
+  steppers[1]->moveTo(steps_Y); // Y-axis (Elbow)
+  steppers[0]->moveTo(steps_X); // X-axis (Tip)
 
   // Wait for movement to complete (blocking)
   while (steppers[0]->isRunning() || steppers[1]->isRunning() || 
          steppers[2]->isRunning() || steppers[3]->isRunning()) {
     delay(1); // Yield to ESP32
   }
-
-  Serial.println("Target position reached.");
+  
   return true;
 }
