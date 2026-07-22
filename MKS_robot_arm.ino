@@ -59,6 +59,7 @@ enum HomingState {
 };
 
 void runSimultaneousHoming();
+bool moveToCylindrical(float target_z, float target_r, float target_theta_deg, int elbow_mode);
 
 void setup() {
   Serial.begin(115200);
@@ -158,4 +159,84 @@ void runSimultaneousHoming() {
   }
 
   Serial.println("All axes successfully homed!");
+}
+
+// Moves the arm to a target in cylindrical coordinates:
+// z: Height in mm
+// r: Extension radius in mm
+// theta: Planar angle in degrees
+bool moveToCylindrical(float target_z, float target_r, float target_theta_deg, int elbow_mode = 0) {
+  
+  // 1. Safety Check: Is the target within physical limits?
+  if (target_z < MIN_HEIGHT || target_z > MAX_HEIGHT) {
+    Serial.println("Error: Target Z is out of bounds!");
+    return false;
+  }
+  if (target_r < MIN_REACH || target_r > MAX_REACH) {
+    Serial.println("Error: Target Radius is unreachable!");
+    return false;
+  }
+  // TODO: This limitation can be extended by operating the L1 and L2 joints
+  if (target_theta_deg < MIN_PLANAR || target_theta_deg > MAX_PLANAR) {
+    Serial.println("Error: Target Planar angle is unreachable!");
+    return false;
+  }
+
+  // Inverse Kinematics (law of cosines)
+  // The angle for L2 (elbow)
+  float cos_psiX = (sq(target_r) - sq(L1) - sq(L2)) / (2.0 * L1 * L2);
+  float psiX = acos(cos_psiX);
+  float thetaX_deg = (PI - psiX) * 180 / PI;
+
+  // The angle of L1 (Y-axis / Shoulder) relative to the radial line (goal)
+  float cos_thetaY = (sq(L2) - sq(target_r) - sq(L1)) / (2.0 * L1 * target_r);
+  float thetaY_deg = acos(cos_thetaY) * 180.0 / PI;
+
+  // TODO: consider posible shoulder-elbow positons. For the most points both positions would work,
+  // but for some points (near the operating edge) - only one position might be valid.
+  // Regardless the case, thetaX and thetaY should always have the opposite signs:
+  thetaY_deg = - thetaY_deg;  // by the default the elbow is fasing RIGHT
+
+  // Apply Angular Compensation for the SCARA Offset
+  // To keep the tip at 'target_theta', the base (A) must rotate LESS (or more)
+  // because the shoulder (Y) swings outward by 'thetaY_deg'.
+  if (elbow_mode == 0)
+  {
+    // TODO: Kinematic position automatic solver
+  }
+  else if (elbow_mode == 1)  // force elbow to face LEFT
+  {
+    thetaY_deg = - thetaY_deg;
+    thetaX_deg = - thetaX_deg;
+  }
+  float thetaA_deg = target_theta_deg + thetaY_deg; 
+
+  // 4. Convert Physical Units to Motor Steps
+  long steps_Z = target_z * STEPS_PER_MM_Z;
+  long steps_A = thetaA_deg * STEPS_PER_DEG_A;
+  long steps_Y = thetaY_deg * STEPS_PER_DEG_Y;
+  long steps_X = thetaX_deg * STEPS_PER_DEG_X;
+
+  // 5. Execute the Movement
+  Serial.print("Moving to -> Z: "); Serial.print(target_z);
+  Serial.print("mm, R: "); Serial.print(target_r);
+  Serial.print("mm, Angle: "); Serial.print(target_theta_deg); Serial.println("°");
+  Serial.print("Motor Targets -> A (Base): "); Serial.print(thetaA_deg);
+  Serial.print("°, Y (Shoulder): "); Serial.print(thetaY_deg);
+  Serial.print("°, X (Elbow): "); Serial.print(thetaX_deg); Serial.println("°");
+
+  // Send targets to FastAccelStepper (non-blocking)
+  steppers[2]->moveTo(steps_Z); // Z-axis
+  steppers[3]->moveTo(steps_A); // A-axis (Base)
+  steppers[1]->moveTo(steps_Y); // Y-axis (Shoulder)
+  steppers[0]->moveTo(steps_X); // X-axis (Elbow)
+
+  // Wait for movement to complete (blocking)
+  while (steppers[0]->isRunning() || steppers[1]->isRunning() || 
+         steppers[2]->isRunning() || steppers[3]->isRunning()) {
+    delay(1); // Yield to ESP32
+  }
+
+  Serial.println("Target position reached.");
+  return true;
 }
