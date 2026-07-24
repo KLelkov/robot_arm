@@ -13,11 +13,11 @@ const uint8_t pin_LIMIT[NUM_MOTORS] = { 39, 40, 41, 37 };
 
 // --- Hardware settings ---
 const float L1 = 235.0;  // length of Inner Arm (Y-axis link) in mm
-const float L2 = 140.0;  // length of Outer Arm (X-axis link) in mm
+const float L2 = 145.0;  // length of Outer Arm (X-axis link) in mm
 
 // Transmission ratios
 const float GEAR_RATIO_A = 19.1;
-const float GEAR_RATIO_Z = 0.121; 
+const float GEAR_RATIO_Z = 0.12; 
 const float GEAR_RATIO_Y = 16.0; 
 const float GEAR_RATIO_X = 4.5;
 
@@ -44,12 +44,12 @@ const float STEPS_PER_DEG_Y = (STEPS_PER_ROTATION * GEAR_RATIO_Y) / 360.0;
 const float STEPS_PER_DEG_X = (STEPS_PER_ROTATION * GEAR_RATIO_X) / 360.0;
 
 // Software limits
-const float MIN_HEIGHT = -100.0;  // mm
-const float MAX_HEIGHT = 0.0;  // mm
+const float MIN_HEIGHT = 0.0;  // mm
+const float MAX_HEIGHT = 170.0;  // mm
 const float MIN_REACH = abs(L1 - L2) + 5.0;  // mm
 const float MAX_REACH = abs(L1 + L2) - 5.0;  // mm
-const float MAX_PLANAR = 300.0;  // deg
-const float MIN_PLANAR = 0.0;  // deg
+const float MAX_PLANAR = 136;  // deg
+const float MIN_PLANAR = -164;  // deg
 
 // Homing States for the State Machine
 enum HomingState {
@@ -102,10 +102,17 @@ void setup()
   //steppers[3]->setSpeedInHz(2 * STEPS_PER_ROTATION);
   //steppers[2]->move(10 * STEPS_PER_MM_Z);
 
-  if (send2motors(0, 0, 0, 0))
-  {
-    Serial.println("Target position reached");
-  }
+  //if (send2motors(0, 0, 0, 0))
+  //{
+  //  Serial.println("Target position reached");
+  //}
+
+  moveToCylindrical(150, 310, -45, 0);
+  delay(2000);
+  moveToCylindrical(120, 340, 0, 1);
+  delay(2000);
+  moveToCylindrical(80, 200, 135, 0);
+  
 }
 
 
@@ -198,12 +205,15 @@ bool moveToCylindrical(float target_z, float target_r, float target_theta_deg, i
 
   // Inverse Kinematics (law of cosines)
   // The angle for L2 (elbow)
-  float cos_psiX = (sq(target_r) - sq(L1) - sq(L2)) / (2.0 * L1 * L2);
+  float cos_psiX = (-sq(target_r) + sq(L1) + sq(L2)) / (2.0 * L1 * L2);
+  //float cos_psiX = (sq(0.35) - sq(0.235) - sq(0.14)) / (2.0 * 0.235 * 0.14);
   float psiX = acos(cos_psiX);
+  Serial.print("Kinematic - psiX angle: "); Serial.println(psiX);
   float thetaX_deg = (PI - psiX) * 180 / PI;
+  Serial.print("Kinematic - Elbow angle: "); Serial.println(thetaX_deg);
 
   // The angle of L1 (Y-axis / Shoulder) relative to the radial line (goal)
-  float cos_thetaY = (sq(L2) - sq(target_r) - sq(L1)) / (2.0 * L1 * target_r);
+  float cos_thetaY = (-sq(L2) + sq(target_r) + sq(L1)) / (2.0 * L1 * target_r);
   float thetaY_deg = acos(cos_thetaY) * 180.0 / PI;
 
   // TODO: consider posible shoulder-elbow positons. For the most points both positions would work,
@@ -230,7 +240,7 @@ bool moveToCylindrical(float target_z, float target_r, float target_theta_deg, i
   Serial.print("mm, R: "); Serial.print(target_r);
   Serial.print("mm, Angle: "); Serial.print(target_theta_deg); Serial.println("°");
 
-  if (send2motors(thetaX_deg, thetaY_deg, target_z, thetaA_deg))
+  if (send2motors(0, thetaX_deg, target_z, thetaA_deg))
   {
     Serial.println("Target position reached.");
   }
@@ -266,6 +276,7 @@ bool send2motors(float target_x_deg, float target_y_deg, float target_z, float t
   }
   if (elbow_angle_deg < 0 || elbow_angle_deg > 275)
   {
+    Serial.print("Invalid given Y axis cmd (deg): "); Serial.println(target_y_deg);
     Serial.print("Invalid Y axis cmd (deg): "); Serial.println(elbow_angle_deg);
     return false;
   }
