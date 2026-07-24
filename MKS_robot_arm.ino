@@ -17,7 +17,7 @@ const float L2 = 140.0;  // length of Outer Arm (X-axis link) in mm
 
 // Transmission ratios
 const float GEAR_RATIO_A = 19.1;
-const float GEAR_RATIO_Z = 0.125; 
+const float GEAR_RATIO_Z = 0.121; 
 const float GEAR_RATIO_Y = 16.0; 
 const float GEAR_RATIO_X = 4.5;
 
@@ -35,7 +35,7 @@ const int MOTOR_STEPS_PER_REV = 200;
 const int MICROSTEPS = 8;
 const int STEPS_PER_ROTATION = MOTOR_STEPS_PER_REV * MICROSTEPS;
 
-const int HOMING_SPEED = 2 * STEPS_PER_ROTATION;  // slow, safe speed for finding the switch
+const int HOMING_SPEED = 2200;  // slow, safe speed for finding the switch
 
 // Transition coefficients
 const float STEPS_PER_DEG_A = (STEPS_PER_ROTATION * GEAR_RATIO_A) / 360.0;
@@ -68,6 +68,7 @@ void setup()
   delay(500);
   Serial.println("Robot arm code initialized.");
 
+
   // --- Configure FastAccelStepper ---
   engine.init();
   for (int i = 0; i < NUM_MOTORS; i++)
@@ -95,11 +96,16 @@ void setup()
   runSimultaneousHoming();
 
   delay(1500);
-  steppers[0]->move(-100 * STEPS_PER_DEG_X * homingDirs[0]);
+  //steppers[0]->move(-100 * STEPS_PER_DEG_X * homingDirs[0]);
   //Serial.print("Stepper X outer limit: "); Serial.println(steppers[0]->getCurrentPosition());
-  delay(2500);
-  steppers[3]->setSpeedInHz(2 * STEPS_PER_ROTATION);
-  steppers[3]->move(-300 * STEPS_PER_DEG_A * homingDirs[3]);
+  //delay(2500);
+  //steppers[3]->setSpeedInHz(2 * STEPS_PER_ROTATION);
+  //steppers[2]->move(10 * STEPS_PER_MM_Z);
+
+  if (send2motors(0, 0, 0, 0))
+  {
+    Serial.println("Target position reached");
+  }
 }
 
 
@@ -112,6 +118,7 @@ void loop()
 // --- SIMULTANEOUS HOMING FUNCTION ---
 void runSimultaneousHoming()
 {
+  Serial.print("Homing speed set to: "); Serial.println(HOMING_SPEED);
   Serial.println("Simultaneous homing sequence started...");
 
   HomingState axisState[NUM_MOTORS];
@@ -238,31 +245,31 @@ bool moveToCylindrical(float target_z, float target_r, float target_theta_deg, i
 
 bool send2motors(float target_x_deg, float target_y_deg, float target_z, float target_a_deg)
 {
-  float base_z = 300;  // mm, base Z position
-  float base_a_deg = 95.0;  // deg, base A position
-  float base_x_deg = 95.0;  // deg, base X position
-  float base_y_deg = 95.0;  // deg, base Y position
-  float height = target_z - base_z;  // target_z is calculated up from the bottom, while the real zero - up-most position
-  float planar_angle_deg = target_a_deg - base_a_deg;  // the real zero is the right-most position
-  float elbow_angle_deg = target_y_deg - base_y_deg;  // the real zero is the right-most position
-  float tip_angle_deg = target_x_deg - base_x_deg;  // the real zero is right-most position
+  float base_z = 170;  // mm, base Z position
+  float base_a_deg = 164;  // deg, base A position
+  float base_x_deg = 100;  // deg, base X position
+  float base_y_deg = 136;  // deg, base Y position
+  float height = -target_z + base_z;  // target_z is calculated up from the bottom, while the real zero - up-most position
+  float planar_angle_deg = target_a_deg + base_a_deg;  // the real zero is the right-most position
+  float elbow_angle_deg = target_y_deg + base_y_deg;  // the real zero is the right-most position
+  float tip_angle_deg = -(target_x_deg + base_x_deg);  // the real zero is right-most position
 
-  if (height > 0 || height < base_z)
+  if (height < 0 || height > 170)
   {
     Serial.print("Invalid Z axis cmd (mm): "); Serial.println(height);
     return false;
   }
-  if (planar_angle_deg < 0 || planar_angle_deg > base_a_deg*2)
+  if (planar_angle_deg < 0 || planar_angle_deg > 300)
   {
     Serial.print("Invalid A axis cmd (deg): "); Serial.println(planar_angle_deg);
     return false;
   }
-  if (elbow_angle_deg < 0 || elbow_angle_deg > base_y_deg*2)
+  if (elbow_angle_deg < 0 || elbow_angle_deg > 275)
   {
     Serial.print("Invalid Y axis cmd (deg): "); Serial.println(elbow_angle_deg);
     return false;
   }
-  if (tip_angle_deg < 0 || tip_angle_deg > base_x_deg*2)
+  if (tip_angle_deg > 0 || tip_angle_deg < -270)
   {
     Serial.print("Invalid X axis cmd (deg): "); Serial.println(tip_angle_deg);
     return false;
