@@ -12,14 +12,15 @@ const uint8_t pin_STEP[NUM_MOTORS] =  { 16,  7,  5, 20 };
 const uint8_t pin_LIMIT[NUM_MOTORS] = { 39, 40, 41, 37 };
 
 // --- Hardware settings ---
-const float L1 = 235.0;  // length of Inner Arm (Y-axis link) in mm
-const float L2 = 145.0;  // length of Outer Arm (X-axis link) in mm
+const float L1 = 227.0;  // length of Inner Arm (Y-axis link) in mm
+const float L2 = 135.0;  // length of Outer Arm (X-axis link) in mm
+const float TIP_RADIUS = 38.8;
 
 // Transmission ratios
-const float GEAR_RATIO_A = 19.1;
+const float GEAR_RATIO_A = 19.035;
 const float GEAR_RATIO_Z = 0.12; 
-const float GEAR_RATIO_Y = 16.0; 
-const float GEAR_RATIO_X = 4.5;
+const float GEAR_RATIO_Y = 15.9; 
+const float GEAR_RATIO_X = 4.61;
 
 FastAccelStepper* steppers[NUM_MOTORS];
 const int homingDirs[NUM_MOTORS] = {1, -1, -1, -1};  // direction for each axis
@@ -107,11 +108,20 @@ void setup()
   //  Serial.println("Target position reached");
   //}
 
-  moveToCylindrical(150, 310, -45, 0);
-  delay(2000);
-  moveToCylindrical(120, 340, 0, 1);
-  delay(2000);
-  moveToCylindrical(80, 200, 135, 0);
+  //moveToCylindrical(150, 310, -45, 0);
+  //delay(2000);
+  //moveToCylindrical(120, 340, 0, 1);
+  //delay(2000);
+  //moveToCylindrical(80, 200, 135, 0);
+  send2motors(0, 0, 150, 0);
+  delay(5000);
+  send2motors(0, 0, 5, -135);
+  delay(5000);
+  send2motors(0, 0, 5, -45);
+  delay(5000);
+  send2motors(0, -0, 5, 45);
+  delay(5000);
+  send2motors(0, 0, 55, 135);
   
 }
 
@@ -256,9 +266,9 @@ bool moveToCylindrical(float target_z, float target_r, float target_theta_deg, i
 bool send2motors(float target_x_deg, float target_y_deg, float target_z, float target_a_deg)
 {
   float base_z = 170;  // mm, base Z position
-  float base_a_deg = 164;  // deg, base A position
+  float base_a_deg = 161;  // deg, base A position
   float base_x_deg = 100;  // deg, base X position
-  float base_y_deg = 136;  // deg, base Y position
+  float base_y_deg = 139;  // deg, base Y position
   float height = -target_z + base_z;  // target_z is calculated up from the bottom, while the real zero - up-most position
   float planar_angle_deg = target_a_deg + base_a_deg;  // the real zero is the right-most position
   float elbow_angle_deg = target_y_deg + base_y_deg;  // the real zero is the right-most position
@@ -274,7 +284,7 @@ bool send2motors(float target_x_deg, float target_y_deg, float target_z, float t
     Serial.print("Invalid A axis cmd (deg): "); Serial.println(planar_angle_deg);
     return false;
   }
-  if (elbow_angle_deg < 0 || elbow_angle_deg > 275)
+  if (elbow_angle_deg < 0 || elbow_angle_deg > 280)
   {
     Serial.print("Invalid given Y axis cmd (deg): "); Serial.println(target_y_deg);
     Serial.print("Invalid Y axis cmd (deg): "); Serial.println(elbow_angle_deg);
@@ -298,6 +308,8 @@ bool send2motors(float target_x_deg, float target_y_deg, float target_z, float t
   Serial.print("°, Y (Elbow): "); Serial.print(elbow_angle_deg);
   Serial.print("°, X (Tip): "); Serial.print(tip_angle_deg); Serial.println("°");
 
+  
+
   // Send targets to FastAccelStepper (non-blocking)
   steppers[2]->moveTo(steps_Z); // Z-axis
   steppers[3]->moveTo(steps_A); // A-axis (Base/Shouler)
@@ -309,6 +321,8 @@ bool send2motors(float target_x_deg, float target_y_deg, float target_z, float t
          steppers[2]->isRunning() || steppers[3]->isRunning()) {
     delay(1); // Yield to ESP32
   }
+  Serial.print("A: "); Serial.println(steppers[3]->getCurrentPosition());
+  Serial.print("Y: "); Serial.println(steppers[1]->getCurrentPosition());
   
   return true;
 }
