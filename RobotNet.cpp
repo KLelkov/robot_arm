@@ -11,11 +11,15 @@ RobotNet::RobotNet() {}
 void RobotNet::registerCallbacks(CylindricalMoveCallback cylCb, 
                                  MotorMoveCallback motorCb,
                                  StepsMoveCallback stepsCb,
-                                 StatusCallback statusCb) {
+                                 StatusCallback statusCb,
+                                 GetStepsCallback getStepsCb,
+                                 GetAnglesCallback getAnglesCb) {
   onCylindricalMove = cylCb;
   onMotorMove = motorCb;
   onStepsMove = stepsCb;
   onGetStatus = statusCb;
+  onGetSteps = getStepsCb;
+  onGetAngles = getAnglesCb;
 }
 
 void RobotNet::begin(const char* ssid, const char* password) {
@@ -122,6 +126,40 @@ void RobotNet::setupRoutes() {
       }
     }
   );
+
+  server.on("/position/steps", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    long x = 0, y = 0, z = 0, a = 0;
+    if (onGetSteps) {
+      onGetSteps(x, y, z, a);
+    }
+
+    StaticJsonDocument<256> res;
+    res["x"] = x;
+    res["y"] = y;
+    res["z"] = z;
+    res["a"] = a;
+
+    String response;
+    serializeJson(res, response);
+    request->send(200, "application/json", response);
+  });
+
+  server.on("/position/angles", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    float x = 0, y = 0, z = 0, a = 0;
+    if (onGetAngles) {
+      onGetAngles(x, y, z, a);
+    }
+
+    StaticJsonDocument<256> res;
+    res["x"] = x;
+    res["y"] = y;
+    res["z"] = z;
+    res["a"] = a;
+
+    String response;
+    serializeJson(res, response);
+    request->send(200, "application/json", response);
+  });
 
   // --- Route: Status Request ---
   server.on("/status", HTTP_GET, [this](AsyncWebServerRequest *request) {

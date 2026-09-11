@@ -13,13 +13,13 @@ const uint8_t pin_DIR[NUM_MOTORS] =   { 15,  6,  4, 19 };
 const uint8_t pin_STEP[NUM_MOTORS] =  { 16,  7,  5, 20 };
 const uint8_t pin_LIMIT[NUM_MOTORS] = { 39, 40, 41, 37 };
 
-const float L1 = 225.0;
-const float L2 = 130.0;
+const float L1 = 226.0;
+const float L2 = 135.0;
 const float TIP_RADIUS = 38.8;
 
-const float GEAR_RATIO_A = 19.035;
-const float GEAR_RATIO_Z = 0.12; 
-const float GEAR_RATIO_Y = 15.9; 
+const float GEAR_RATIO_A = 19.055; // True
+const float GEAR_RATIO_Z = 0.124; // True
+const float GEAR_RATIO_Y = 16.071; // True
 const float GEAR_RATIO_X = 4.61;
 
 FastAccelStepper* steppers[NUM_MOTORS];
@@ -44,6 +44,12 @@ const float MAX_REACH = abs(L1 + L2);
 const float MAX_PLANAR = 136;
 const float MIN_PLANAR = -164;
 
+
+const float base_z = 170;
+const float base_a_deg = 163;
+const float base_x_deg = 100;
+const float base_y_deg = 136;
+
 enum HomingState { SEEKING_SWITCH, BACKING_OFF, HOMING_COMPLETE };
 const int Z_AXIS_INDEX = 2;
 const unsigned long OTHER_AXES_DELAY_MS = 5000;
@@ -62,6 +68,8 @@ bool handleMotorRequest(float target_x_deg, float target_y_deg, float target_z, 
 bool calculateSteps(float target_x_deg, float target_y_deg, float target_z, float target_a_deg, long outSteps[4]);
 void getRobotStatus(long &z, long &a, long &y, long &x, bool &isBusy);
 bool handleStepsRequest(long target_x, long target_y, long target_z, long target_a);
+void getCurrentSteps(long &x, long &y, long &z, long &a);
+void getCurrentAngles(float &x, float &y, float &z, float &a);
 
 void setup()
 {
@@ -88,7 +96,7 @@ void setup()
   delay(500);
 
   // Link callbacks
-  robotNet.registerCallbacks(handleCylindricalRequest, handleMotorRequest, handleStepsRequest, getRobotStatus);
+  robotNet.registerCallbacks(handleCylindricalRequest, handleMotorRequest, handleStepsRequest, getRobotStatus, getCurrentSteps, getCurrentAngles);
   robotNet.begin(WIFI_SSID, WIFI_PASS);
 }
 
@@ -127,19 +135,19 @@ void getRobotStatus(long &z, long &a, long &y, long &x, bool &isBusy) {
 
 // Kinematics Validation & Conversion (Non-Blocking)
 bool calculateSteps(float target_x_deg, float target_y_deg, float target_z, float target_a_deg, long outSteps[4]) {
-  float base_z = 170;
-  float base_a_deg = 161;
-  float base_x_deg = 100;
-  float base_y_deg = 139;
+  //float base_z = 170;
+  //float base_a_deg = 163;
+  //float base_x_deg = 100;
+  //float base_y_deg = 136;
   
   float height = -target_z + base_z;
   float planar_angle_deg = target_a_deg + base_a_deg;
   float elbow_angle_deg = target_y_deg + base_y_deg;
   float tip_angle_deg = -(target_x_deg + base_x_deg);
 
-  if (height < 0 || height > 170) return false;
-  if (planar_angle_deg < 0 || planar_angle_deg > 300) return false;
-  if (elbow_angle_deg < 0 || elbow_angle_deg > 280) return false;
+  if (height < 5 || height > 170) return false;
+  if (planar_angle_deg < 3 || planar_angle_deg > 303) return false;
+  if (elbow_angle_deg < 6 || elbow_angle_deg > 276) return false;
   if (tip_angle_deg > 0 || tip_angle_deg < -270) return false;
 
   outSteps[2] = height * STEPS_PER_MM_Z;           // Z
@@ -199,12 +207,26 @@ bool handleMotorRequest(float target_x_deg, float target_y_deg, float target_z, 
 
 bool handleStepsRequest(long target_x, long target_y, long target_z, long target_a) {
   if (isArmMoving()) return false;
-
-  // Optional: Safety range checks based on your hardware.
+  
   // Axis array mapping: [0] = X, [1] = Y, [2] = Z, [3] = A
-  // Z-Axis check (example: cannot go below 0 or above 135000):
-  if (target_z < 0 || target_z > 135000) {
+  // X-Axis check
+  if (target_x > 0 || target_x < 5000) {
+    Serial.println("Step error: X target out of bounds!");
+    return false;
+  }
+  // Y-Axis check
+  if (target_y < 0 || target_y > 20000) {
+    Serial.println("Step error: Y target out of bounds!");
+    return false;
+  }
+  // Z-Axis check
+  if (target_z < 0 || target_z > 33000) {
     Serial.println("Step error: Z target out of bounds!");
+    return false;
+  }
+  // A-Axis check
+  if (target_a < 0 || target_a > 26000) {
+    Serial.println("Step error: A target out of bounds!");
     return false;
   }
 
@@ -282,4 +304,18 @@ void runSimultaneousHoming() {
     delay(1);
   }
   Serial.println("All axes homed successfully!");
+}
+
+void getCurrentSteps(long &x, long &y, long &z, long &a) {
+  x = steppers[0] ? steppers[0]->getCurrentPosition() : 0;
+  y = steppers[1] ? steppers[1]->getCurrentPosition() : 0;
+  z = steppers[2] ? steppers[2]->getCurrentPosition() : 0;
+  a = steppers[3] ? steppers[3]->getCurrentPosition() : 0;
+}
+
+void getCurrentAngles(float &x, float &y, float &z, float &a) {
+  x = steppers[0] ? -(steppers[0]->getCurrentPosition() / STEPS_PER_DEG_X + base_x_deg): 0;
+  y = steppers[1] ? (steppers[1]->getCurrentPosition() / STEPS_PER_DEG_Y - base_y_deg): 0;
+  z = steppers[2] ? (base_z - steppers[2]->getCurrentPosition() / STEPS_PER_MM_Z): 0;
+  a = steppers[3] ? (steppers[3]->getCurrentPosition() / STEPS_PER_DEG_A - base_a_deg): 0;
 }

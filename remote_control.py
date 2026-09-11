@@ -33,7 +33,32 @@ def move_steps(x, y, z, a, wait=True):
         time.sleep(0.1)
         wait_until_idle()
 
+def get_steps():
+    url = f"{ROBOT_IP}/position/steps"
+    try:
+        res = requests.get(url, timeout=2)
+        steps = res.json()
+        print(f"Current Steps -> X: {steps['x']}, Y: {steps['y']}, Z: {steps['z']}, A: {steps['a']}")
+        return steps
+    except Exception as e:
+        print(f"Error fetching steps: {e}")
+        return None
+
+def get_angles():
+    url = f"{ROBOT_IP}/position/angles"
+    try:
+        res = requests.get(url, timeout=2)
+        steps = res.json()
+        print(f"Current Angles -> X: {steps['x']:.2f}, Y: {steps['y']:.2f}, Z: {steps['z']:.2f} mm, A: {steps['a']:.2f}")
+        return steps
+    except Exception as e:
+        print(f"Error fetching angles: {e}")
+        return None
+
 # Example Usage:
-move_steps(x=0, y=0, z=0, a=5000)
-#move_cylindrical(z=3, r=300, theta=136, elbow=0)
-#move_cylindrical(z=50, r=200, theta=0, elbow=0)
+#move_steps(x=-5000, y=9720, z=30100, a=13804)
+#move_cylindrical(z=15, r=150, theta=0, elbow=0)
+move_cylindrical(z=150, r=200, theta=-40, elbow=0)
+
+get_steps()
+get_angles()
