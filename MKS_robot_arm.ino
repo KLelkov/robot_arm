@@ -191,12 +191,12 @@ bool handleMotorRequest(float target_x_deg, float target_y_deg, float target_z, 
   if (isArmMoving()) return false;
 
   // X-Axis check
-  if (target_x > 170 || target_x < -100) {
+  if (target_x_deg > 170 || target_x_deg < -100) {
     Serial.println("Angle error: X target out of bounds!");
     return false;
   }
   // Y-Axis check
-  if (target_y < 130 || target_y > 140) {
+  if (target_y_deg < 130 || target_y_deg > 140) {
     Serial.println("Angle error: Y target out of bounds!");
     return false;
   }
@@ -206,7 +206,7 @@ bool handleMotorRequest(float target_x_deg, float target_y_deg, float target_z, 
     return false;
   }
   // A-Axis check
-  if (target_a < 160 || target_a > 140) {
+  if (target_a_deg < 160 || target_a_deg > 140) {
     Serial.println("Angle error: A target out of bounds!");
     return false;
   }
