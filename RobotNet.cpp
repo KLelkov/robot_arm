@@ -9,10 +9,12 @@ static AsyncWebServer server(80);
 RobotNet::RobotNet() {}
 
 void RobotNet::registerCallbacks(CylindricalMoveCallback cylCb, 
-                                 MotorMoveCallback motorCb, 
+                                 MotorMoveCallback motorCb,
+                                 StepsMoveCallback stepsCb,
                                  StatusCallback statusCb) {
   onCylindricalMove = cylCb;
   onMotorMove = motorCb;
+  onStepsMove = stepsCb;
   onGetStatus = statusCb;
 }
 
@@ -38,9 +40,9 @@ void RobotNet::begin(const char* ssid, const char* password) {
 }
 
 void RobotNet::setupRoutes() {
+  // --- Route: Cylindrical Move ---
   server.on("/move/cylindrical", HTTP_POST, [](AsyncWebServerRequest *request){}, NULL,
     [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-      
       StaticJsonDocument<256> doc;
       DeserializationError err = deserializeJson(doc, (char*)data);
 
@@ -67,9 +69,9 @@ void RobotNet::setupRoutes() {
     }
   );
 
+  // --- Route: Angles/MM Move ---
   server.on("/move/motors", HTTP_POST, [](AsyncWebServerRequest *request){}, NULL,
     [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-      
       StaticJsonDocument<256> doc;
       DeserializationError err = deserializeJson(doc, (char*)data);
 
@@ -91,6 +93,37 @@ void RobotNet::setupRoutes() {
     }
   );
 
+  // --- NEW Route: Direct Step Counts ---
+  // Payload example: {"x": -1000, "y": 3000, "z": 12000, "a": 5000}
+  server.on("/move/steps", HTTP_POST, [](AsyncWebServerRequest *request){}, NULL,
+    [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+      StaticJsonDocument<256> doc;
+      DeserializationError err = deserializeJson(doc, (char*)data);
+
+      if (err) {
+        request->send(400, "application/json", "{\"status\":\"error\", \"message\":\"Invalid JSON\"}");
+        return;
+      }
+
+      if (!doc.containsKey("x") || !doc.containsKey("y") || !doc.containsKey("z") || !doc.containsKey("a")) {
+        request->send(400, "application/json", "{\"status\":\"error\", \"message\":\"Missing parameters (x, y, z, a)\"}");
+        return;
+      }
+
+      long x = doc["x"];
+      long y = doc["y"];
+      long z = doc["z"];
+      long a = doc["a"];
+
+      if (onStepsMove && onStepsMove(x, y, z, a)) {
+        request->send(200, "application/json", "{\"status\":\"accepted\"}");
+      } else {
+        request->send(422, "application/json", "{\"status\":\"error\", \"message\":\"Robot busy or step limits exceeded\"}");
+      }
+    }
+  );
+
+  // --- Route: Status Request ---
   server.on("/status", HTTP_GET, [this](AsyncWebServerRequest *request) {
     long z = 0, a = 0, y = 0, x = 0;
     bool isBusy = false;

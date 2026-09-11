@@ -13,8 +13,8 @@ const uint8_t pin_DIR[NUM_MOTORS] =   { 15,  6,  4, 19 };
 const uint8_t pin_STEP[NUM_MOTORS] =  { 16,  7,  5, 20 };
 const uint8_t pin_LIMIT[NUM_MOTORS] = { 39, 40, 41, 37 };
 
-const float L1 = 227.0;
-const float L2 = 135.0;
+const float L1 = 225.0;
+const float L2 = 130.0;
 const float TIP_RADIUS = 38.8;
 
 const float GEAR_RATIO_A = 19.035;
@@ -40,7 +40,7 @@ const float STEPS_PER_DEG_X = (STEPS_PER_ROTATION * GEAR_RATIO_X) / 360.0;
 const float MIN_HEIGHT = 0.0;
 const float MAX_HEIGHT = 170.0;
 const float MIN_REACH = abs(L1 - L2) + 5.0;
-const float MAX_REACH = abs(L1 + L2) - 5.0;
+const float MAX_REACH = abs(L1 + L2);
 const float MAX_PLANAR = 136;
 const float MIN_PLANAR = -164;
 
@@ -61,6 +61,7 @@ bool handleCylindricalRequest(float target_z, float target_r, float target_theta
 bool handleMotorRequest(float target_x_deg, float target_y_deg, float target_z, float target_a_deg);
 bool calculateSteps(float target_x_deg, float target_y_deg, float target_z, float target_a_deg, long outSteps[4]);
 void getRobotStatus(long &z, long &a, long &y, long &x, bool &isBusy);
+bool handleStepsRequest(long target_x, long target_y, long target_z, long target_a);
 
 void setup()
 {
@@ -87,7 +88,7 @@ void setup()
   delay(500);
 
   // Link callbacks
-  robotNet.registerCallbacks(handleCylindricalRequest, handleMotorRequest, getRobotStatus);
+  robotNet.registerCallbacks(handleCylindricalRequest, handleMotorRequest, handleStepsRequest, getRobotStatus);
   robotNet.begin(WIFI_SSID, WIFI_PASS);
 }
 
@@ -192,6 +193,27 @@ bool handleMotorRequest(float target_x_deg, float target_y_deg, float target_z, 
   }
 
   for (int i = 0; i < NUM_MOTORS; i++) pendingMove.targetSteps[i] = steps[i];
+  pendingMove.newCommand = true;
+  return true;
+}
+
+bool handleStepsRequest(long target_x, long target_y, long target_z, long target_a) {
+  if (isArmMoving()) return false;
+
+  // Optional: Safety range checks based on your hardware.
+  // Axis array mapping: [0] = X, [1] = Y, [2] = Z, [3] = A
+  // Z-Axis check (example: cannot go below 0 or above 135000):
+  if (target_z < 0 || target_z > 135000) {
+    Serial.println("Step error: Z target out of bounds!");
+    return false;
+  }
+
+  // Queue raw steps into the pending move struct
+  pendingMove.targetSteps[0] = target_x; // X (Tip)
+  pendingMove.targetSteps[1] = target_y; // Y (Elbow)
+  pendingMove.targetSteps[2] = target_z; // Z (Height)
+  pendingMove.targetSteps[3] = target_a; // A (Base)
+  
   pendingMove.newCommand = true;
   return true;
 }
