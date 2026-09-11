@@ -97,31 +97,22 @@ void setup()
   runSimultaneousHoming();
 
   delay(1500);
-  //steppers[0]->move(-100 * STEPS_PER_DEG_X * homingDirs[0]);
-  //Serial.print("Stepper X outer limit: "); Serial.println(steppers[0]->getCurrentPosition());
-  //delay(2500);
-  //steppers[3]->setSpeedInHz(2 * STEPS_PER_ROTATION);
-  //steppers[2]->move(10 * STEPS_PER_MM_Z);
 
-  //if (send2motors(0, 0, 0, 0))
-  //{
-  //  Serial.println("Target position reached");
-  //}
 
-  //moveToCylindrical(150, 310, -45, 0);
-  //delay(2000);
-  //moveToCylindrical(120, 340, 0, 1);
+  moveToCylindrical(3, 300, -60, 0);
+  delay(2000);
+  moveToCylindrical(3, 300, -60, 1);
   //delay(2000);
   //moveToCylindrical(80, 200, 135, 0);
-  send2motors(0, 0, 150, 0);
-  delay(5000);
-  send2motors(0, 0, 5, -135);
-  delay(5000);
-  send2motors(0, 0, 5, -45);
-  delay(5000);
-  send2motors(0, -0, 5, 45);
-  delay(5000);
-  send2motors(0, 0, 55, 135);
+  //send2motors(0, 0, 150, 0);
+  //delay(5000);
+  //send2motors(0, 0, 5, -135);
+  //delay(5000);
+  //send2motors(0, 0, 5, -45);
+  //delay(5000);
+  //send2motors(0, -0, 5, 45);
+  //delay(5000);
+  //send2motors(0, 0, 55, 135);
   
 }
 
@@ -132,45 +123,87 @@ void loop()
 }
 
 
-// --- SIMULTANEOUS HOMING FUNCTION ---
+// --- CONFIGURATION ---
+const int Z_AXIS_INDEX = 2;              // Set this to your Z-axis index (e.g., 0, 1, or 2)
+const unsigned long OTHER_AXES_DELAY_MS = 5000; // 5 seconds delay for other axes
+
+// --- HELPER TO START A SINGLE MOTOR ---
+void startMotorHoming(int i, HomingState axisState[]) {
+  if (steppers[i]) {
+    steppers[i]->setSpeedInHz(HOMING_SPEED);
+    if (homingDirs[i] == 1) {
+      steppers[i]->runForward();
+    } else {
+      steppers[i]->runBackward();
+    }
+    axisState[i] = SEEKING_SWITCH;
+    Serial.print("Axis "); Serial.print(i); Serial.println(" started homing.");
+  } else {
+    axisState[i] = HOMING_COMPLETE;  // Skip if motor isn't configured
+  }
+}
+
+// --- STAGGERED HOMING FUNCTION ---
 void runSimultaneousHoming()
 {
   Serial.print("Homing speed set to: "); Serial.println(HOMING_SPEED);
-  Serial.println("Simultaneous homing sequence started...");
+  Serial.println("Staggered homing sequence started...");
 
   HomingState axisState[NUM_MOTORS];
+  bool axisStarted[NUM_MOTORS] = {false};
 
-  // Start all motors moving in their homing directions
+  // 1. Start ONLY the Z-axis immediately
+  startMotorHoming(Z_AXIS_INDEX, axisState);
+  axisStarted[Z_AXIS_INDEX] = true;
+
+  // Mark all other axes as initially inactive
   for (int i = 0; i < NUM_MOTORS; i++) {
-    if (steppers[i]) {
-      steppers[i]->setSpeedInHz(HOMING_SPEED);
-      
-      if (homingDirs[i] == 1) {
-        steppers[i]->runForward();
-      } else {
-        steppers[i]->runBackward();
-      }
-      axisState[i] = SEEKING_SWITCH;
-    } else {
-      axisState[i] = HOMING_COMPLETE;  // skip if the motor is not connected
+    if (i != Z_AXIS_INDEX) {
+      axisState[i] = HOMING_COMPLETE; // Prevent while() from hanging before they start
     }
   }
 
-  // Monitor all switches (motors) at once
+  unsigned long startTime = millis();
+  bool otherAxesStarted = false;
   bool allHomed = false;
+
+  // 2. Monitoring loop
   while (!allHomed) {
-    allHomed = true;  // assume true, will be set to false if any motor is still homing
+    // Check if it's time to start the remaining axes:
+    // (Triggers if 5 seconds elapsed OR if Z already finished homing)
+    if (!otherAxesStarted && 
+       ((millis() - startTime >= OTHER_AXES_DELAY_MS) || (axisState[Z_AXIS_INDEX] == HOMING_COMPLETE))) 
+    {
+      Serial.println("Starting remaining axes...");
+      for (int i = 0; i < NUM_MOTORS; i++) {
+        if (i != Z_AXIS_INDEX) {
+          startMotorHoming(i, axisState);
+          axisStarted[i] = true;
+        }
+      }
+      otherAxesStarted = true;
+    }
 
+    allHomed = true;  // Assume true, verify below
+
+    // If other axes haven't launched yet, homing is obviously not finished
+    if (!otherAxesStarted) {
+      allHomed = false;
+    }
+
+    // Check switches and status of all motors
     for (int i = 0; i < NUM_MOTORS; i++) {
-      if (axisState[i] == SEEKING_SWITCH) {
-        allHomed = false;  // if one is still moving, duh
+      if (!axisStarted[i]) continue;
 
-        // Check if the limit switch is triggered (HIGH means triggered)
+      if (axisState[i] == SEEKING_SWITCH) {
+        allHomed = false;
+
+        // Check limit switch
         if (digitalRead(pin_LIMIT[i]) == HIGH) { 
           steppers[i]->forceStopAndNewPosition(steppers[i]->getCurrentPosition());
           Serial.print("Axis "); Serial.print(i); Serial.println(" hit switch. Backing off...");
           
-          // Start the backoff movement (opposite of homing direction)
+          // Start backoff
           steppers[i]->move(-BACKOFF_STEPS * homingDirs[i]);
           axisState[i] = BACKING_OFF;
         }
@@ -178,15 +211,16 @@ void runSimultaneousHoming()
       else if (axisState[i] == BACKING_OFF) {
         allHomed = false;
 
-        // Check if backoff movement is finished
+        // Check if backoff movement finished
         if (!steppers[i]->isRunning()) {
-          steppers[i]->setCurrentPosition(0);  // set absolute zero
+          steppers[i]->setCurrentPosition(0);  // Set origin
           axisState[i] = HOMING_COMPLETE;
           Serial.print("Axis "); Serial.print(i); Serial.println(" successfully homed to 0.");
         }
       }
     }
-    delay(1);  // yield to ESP32 OS to prevent Watchdog Timer (WDT) resets (triggers)
+
+    delay(1);  // Yield to prevent ESP32 Watchdog Timer reset
   }
 
   Serial.println("All axes successfully homed!");
