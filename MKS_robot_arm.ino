@@ -135,11 +135,6 @@ void getRobotStatus(long &z, long &a, long &y, long &x, bool &isBusy) {
 
 // Kinematics Validation & Conversion (Non-Blocking)
 bool calculateSteps(float target_x_deg, float target_y_deg, float target_z, float target_a_deg, long outSteps[4]) {
-  //float base_z = 170;
-  //float base_a_deg = 163;
-  //float base_x_deg = 100;
-  //float base_y_deg = 136;
-  
   float height = -target_z + base_z;
   float planar_angle_deg = target_a_deg + base_a_deg;
   float elbow_angle_deg = target_y_deg + base_y_deg;
@@ -195,6 +190,27 @@ bool handleCylindricalRequest(float target_z, float target_r, float target_theta
 bool handleMotorRequest(float target_x_deg, float target_y_deg, float target_z, float target_a_deg) {
   if (isArmMoving()) return false;
 
+  // X-Axis check
+  if (target_x > 170 || target_x < -100) {
+    Serial.println("Angle error: X target out of bounds!");
+    return false;
+  }
+  // Y-Axis check
+  if (target_y < 130 || target_y > 140) {
+    Serial.println("Angle error: Y target out of bounds!");
+    return false;
+  }
+  // Z-Axis check
+  if (target_z < 5 || target_z > 170) {
+    Serial.println("Angle error: Z target out of bounds!");
+    return false;
+  }
+  // A-Axis check
+  if (target_a < 160 || target_a > 140) {
+    Serial.println("Angle error: A target out of bounds!");
+    return false;
+  }
+
   long steps[4];
   if (!calculateSteps(target_x_deg, target_y_deg, target_z, target_a_deg, steps)) {
     return false;
@@ -208,7 +224,6 @@ bool handleMotorRequest(float target_x_deg, float target_y_deg, float target_z, 
 bool handleStepsRequest(long target_x, long target_y, long target_z, long target_a) {
   if (isArmMoving()) return false;
   
-  // Axis array mapping: [0] = X, [1] = Y, [2] = Z, [3] = A
   // X-Axis check
   if (target_x > 0 || target_x < 5000) {
     Serial.println("Step error: X target out of bounds!");

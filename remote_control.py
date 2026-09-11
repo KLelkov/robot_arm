@@ -22,6 +22,15 @@ def move_cylindrical(z, r, theta, elbow=0, wait=True):
         time.sleep(0.1) # brief pause to let movement register
         wait_until_idle()
 
+def move_angles(x, y, z, a, wait=True):
+    payload = {"x": x, "y": y, "z": z, "a": a}
+    res = requests.post(f"{ROBOT_IP}/move/motors", json=payload, timeout=2)
+    print(res.json())
+    
+    if wait:
+        time.sleep(0.1) # brief pause to let movement register
+        wait_until_idle()
+
 def move_steps(x, y, z, a, wait=True):
     url = f"{ROBOT_IP}/move/steps"
     payload = {"x": int(x), "y": int(y), "z": int(z), "a": int(a)}
@@ -58,7 +67,8 @@ def get_angles():
 # Example Usage:
 #move_steps(x=-5000, y=9720, z=30100, a=13804)
 #move_cylindrical(z=15, r=150, theta=0, elbow=0)
-move_cylindrical(z=150, r=200, theta=-40, elbow=0)
+#move_cylindrical(z=150, r=200, theta=-40, elbow=0)
 
+move_angles(0, 0, 150, -75)
 get_steps()
 get_angles()
