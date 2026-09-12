@@ -70,6 +70,7 @@ void getRobotStatus(long &z, long &a, long &y, long &x, bool &isBusy);
 bool handleStepsRequest(long target_x, long target_y, long target_z, long target_a);
 void getCurrentSteps(long &x, long &y, long &z, long &a);
 void getCurrentAngles(float &x, float &y, float &z, float &a);
+void getCurrentCylinder(float &z, float &r, float &theta_deg);
 
 void setup()
 {
@@ -96,7 +97,7 @@ void setup()
   delay(500);
 
   // Link callbacks
-  robotNet.registerCallbacks(handleCylindricalRequest, handleMotorRequest, handleStepsRequest, getRobotStatus, getCurrentSteps, getCurrentAngles);
+  robotNet.registerCallbacks(handleCylindricalRequest, handleMotorRequest, handleStepsRequest, getRobotStatus, getCurrentSteps, getCurrentAngles, getCurrentCylinder);
   robotNet.begin(WIFI_SSID, WIFI_PASS);
 }
 
@@ -333,4 +334,18 @@ void getCurrentAngles(float &x, float &y, float &z, float &a) {
   y = steppers[1] ? (steppers[1]->getCurrentPosition() / STEPS_PER_DEG_Y - base_y_deg): 0;
   z = steppers[2] ? (base_z - steppers[2]->getCurrentPosition() / STEPS_PER_MM_Z): 0;
   a = steppers[3] ? (steppers[3]->getCurrentPosition() / STEPS_PER_DEG_A - base_a_deg): 0;
+}
+
+void getCurrentCylinder(float &z_out, float &r_out, float &theta_deg_out) {
+  float cur_x, cur_y, cur_z, cur_a;
+  getCurrentAngles(cur_x, cur_y, cur_z, cur_a);
+
+  z_out = cur_z;  // 'cur_z' from getCurrentAngles is already height (mm)
+  float R2 = sq(L1) + sq(L2) - cos(PI - cur_y * PI / 180) * 2 * L1 * L2;
+  float R = sqrt(R2);
+  float theta_y = - acos((-sq(L2) + R2 + sq(L1)) / (2 * L1 * R));
+  theta_deg_out = cur_a - theta_y * 180 / PI;
+  r_out = R;
+
+  return;
 }

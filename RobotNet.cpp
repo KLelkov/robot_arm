@@ -13,13 +13,15 @@ void RobotNet::registerCallbacks(CylindricalMoveCallback cylCb,
                                  StepsMoveCallback stepsCb,
                                  StatusCallback statusCb,
                                  GetStepsCallback getStepsCb,
-                                 GetAnglesCallback getAnglesCb) {
+                                 GetAnglesCallback getAnglesCb,
+                                 GetCylinderCallback getCylinderCb) {
   onCylindricalMove = cylCb;
   onMotorMove = motorCb;
   onStepsMove = stepsCb;
   onGetStatus = statusCb;
   onGetSteps = getStepsCb;
   onGetAngles = getAnglesCb;
+  onGetCylinder = getCylinderCb;
 }
 
 void RobotNet::begin(const char* ssid, const char* password) {
@@ -155,6 +157,22 @@ void RobotNet::setupRoutes() {
     res["y"] = y;
     res["z"] = z;
     res["a"] = a;
+
+    String response;
+    serializeJson(res, response);
+    request->send(200, "application/json", response);
+  });
+
+  server.on("/position/cylinder", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    float height = 0, reach = 0, theta = 0;
+    if (onGetCylinder) {
+      onGetCylinder(height, reach, theta);
+    }
+
+    StaticJsonDocument<256> res;
+    res["height"] = height;
+    res["reach"] = reach;
+    res["theta"] = theta;
 
     String response;
     serializeJson(res, response);

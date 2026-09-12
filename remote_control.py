@@ -64,11 +64,24 @@ def get_angles():
         print(f"Error fetching angles: {e}")
         return None
 
+def get_cylinder():
+    url = f"{ROBOT_IP}/position/cylinder"
+    try:
+        res = requests.get(url, timeout=2)
+        steps = res.json()
+        print(f"Current Angles -> Height: {steps['height']:.2f}, Reach: {steps['reach']:.2f}, Theta: {steps['theta']:.2f}")
+        return steps
+    except Exception as e:
+        print(f"Error fetching angles: {e}")
+        return None
+
 # Example Usage:
 #move_steps(x=-5000, y=9720, z=30100, a=13804)
 #move_cylindrical(z=15, r=150, theta=0, elbow=0)
-#move_cylindrical(z=150, r=200, theta=-40, elbow=0)
+move_cylindrical(z=150, r=200, theta=-40, elbow=0)
 
-move_angles(0, 0, 150, -75)
+#move_angles(0, 0, 150, -75)
+
 get_steps()
 get_angles()
+get_cylinder()
