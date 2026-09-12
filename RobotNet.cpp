@@ -14,7 +14,8 @@ void RobotNet::registerCallbacks(CylindricalMoveCallback cylCb,
                                  StatusCallback statusCb,
                                  GetStepsCallback getStepsCb,
                                  GetAnglesCallback getAnglesCb,
-                                 GetCylinderCallback getCylinderCb) {
+                                 GetCylinderCallback getCylinderCb,
+                                 SphericalMoveCallback sphCb) {
   onCylindricalMove = cylCb;
   onMotorMove = motorCb;
   onStepsMove = stepsCb;
@@ -22,6 +23,7 @@ void RobotNet::registerCallbacks(CylindricalMoveCallback cylCb,
   onGetSteps = getStepsCb;
   onGetAngles = getAnglesCb;
   onGetCylinder = getCylinderCb;
+  onSphericalMove = sphCb;
 }
 
 void RobotNet::begin(const char* ssid, const char* password) {
@@ -68,6 +70,35 @@ void RobotNet::setupRoutes() {
       int elbow = doc.containsKey("elbow") ? doc["elbow"].as<int>() : 0;
 
       if (onCylindricalMove && onCylindricalMove(z, r, theta, elbow)) {
+        request->send(200, "application/json", "{\"status\":\"accepted\"}");
+      } else {
+        request->send(422, "application/json", "{\"status\":\"error\", \"message\":\"Robot busy or limit exceeded\"}");
+      }
+    }
+  );
+
+  // --- Route: Spherical Move ---
+  server.on("/move/spherical", HTTP_POST, [](AsyncWebServerRequest *request){}, NULL,
+    [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+      StaticJsonDocument<256> doc;
+      DeserializationError err = deserializeJson(doc, (char*)data);
+
+      if (err) {
+        request->send(400, "application/json", "{\"status\":\"error\", \"message\":\"Invalid JSON\"}");
+        return;
+      }
+
+      if (!doc.containsKey("radius") || !doc.containsKey("azimuth") || !doc.containsKey("polar")) {
+        request->send(400, "application/json", "{\"status\":\"error\", \"message\":\"Missing parameters (radius, azimuth, polar)\"}");
+        return;
+      }
+
+      float r = doc["radius"];
+      float theta = doc["azimuth"];
+      float fi = doc["polar"];
+      int elbow = doc.containsKey("elbow") ? doc["elbow"].as<int>() : 0;
+
+      if (onSphericalMove && onSphericalMove(r, theta, fi, elbow)) {
         request->send(200, "application/json", "{\"status\":\"accepted\"}");
       } else {
         request->send(422, "application/json", "{\"status\":\"error\", \"message\":\"Robot busy or limit exceeded\"}");

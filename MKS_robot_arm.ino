@@ -39,7 +39,7 @@ const float STEPS_PER_DEG_X = (STEPS_PER_ROTATION * GEAR_RATIO_X) / 360.0;
 
 const float MIN_HEIGHT = 0.0;
 const float MAX_HEIGHT = 170.0;
-const float MIN_REACH = abs(L1 - L2) + 5.0;
+const float MIN_REACH = 150;  // limited by Y angle range and construction
 const float MAX_REACH = abs(L1 + L2);
 const float MAX_PLANAR = 136;
 const float MIN_PLANAR = -164;
@@ -64,6 +64,7 @@ volatile MotionCommand pendingMove;
 // Declarations
 void runSimultaneousHoming();
 bool handleCylindricalRequest(float target_z, float target_r, float target_theta_deg, int elbow_mode);
+bool handleSphericalRequest(float target_r, float target_theta_deg, float target_fi_deg, int elbow_mode);
 bool handleMotorRequest(float target_x_deg, float target_y_deg, float target_z, float target_a_deg);
 bool calculateSteps(float target_x_deg, float target_y_deg, float target_z, float target_a_deg, long outSteps[4]);
 void getRobotStatus(long &z, long &a, long &y, long &x, bool &isBusy);
@@ -97,7 +98,7 @@ void setup()
   delay(500);
 
   // Link callbacks
-  robotNet.registerCallbacks(handleCylindricalRequest, handleMotorRequest, handleStepsRequest, getRobotStatus, getCurrentSteps, getCurrentAngles, getCurrentCylinder);
+  robotNet.registerCallbacks(handleCylindricalRequest, handleMotorRequest, handleStepsRequest, getRobotStatus, getCurrentSteps, getCurrentAngles, getCurrentCylinder, handleSphericalRequest);
   robotNet.begin(WIFI_SSID, WIFI_PASS);
 }
 
@@ -158,9 +159,18 @@ bool calculateSteps(float target_x_deg, float target_y_deg, float target_z, floa
 bool handleCylindricalRequest(float target_z, float target_r, float target_theta_deg, int elbow_mode) {
   if (isArmMoving()) return false; // Reject if already executing a move
 
-  if (target_z < MIN_HEIGHT || target_z > MAX_HEIGHT) return false;
-  if (target_r < MIN_REACH || target_r > MAX_REACH) return false;
-  if (target_theta_deg < MIN_PLANAR || target_theta_deg > MAX_PLANAR) return false;
+  if (target_z < MIN_HEIGHT || target_z > MAX_HEIGHT) {
+    Serial.print("Height is out of bounds! "); Serial.println(target_z);
+    return false;
+  }
+  if (target_r < MIN_REACH || target_r > MAX_REACH) {
+    Serial.print("Reach distance is out of bounds! "); Serial.println(target_r);
+    return false;
+  }
+  if (target_theta_deg < MIN_PLANAR || target_theta_deg > MAX_PLANAR) {
+    Serial.print("Planar angle is out of bounds! "); Serial.println(target_theta_deg);
+    return false;
+  }
 
   float cos_psiX = (-sq(target_r) + sq(L1) + sq(L2)) / (2.0 * L1 * L2);
   float psiX = acos(cos_psiX);
@@ -187,6 +197,27 @@ bool handleCylindricalRequest(float target_z, float target_r, float target_theta
   return true;
 }
 
+bool handleSphericalRequest(float target_r, float target_theta_deg, float target_fi_deg, int elbow_mode) {
+  if ((target_fi_deg < 42) || (target_fi_deg > 89)) {
+    Serial.print("Polar angle is out of bounds! "); Serial.println(target_fi_deg);
+    return false;
+  }
+  if ((target_theta_deg < MIN_PLANAR) || (target_theta_deg > MAX_PLANAR)) {
+    Serial.print("Azimuth angle is out of bounds! "); Serial.println(target_theta_deg);
+    return false;
+  }
+  if ((target_r < 227) || (target_r > 399)) {
+    Serial.print("Radius is out of bounds! "); Serial.println(target_r);
+    return false;
+  }
+  float R = abs(target_r * sin(target_fi_deg * PI / 180.0)); // planar radius - always positive
+  float azimuth = target_theta_deg;
+  float height = sqrt(sq(target_r) - sq(R));
+  //Serial.print("Cylindrical target R "); Serial.println(R);
+  //Serial.print("Spherical target fi "); Serial.println(target_fi_deg);
+  return handleCylindricalRequest(height, R, azimuth, elbow_mode);
+}
+
 // Network Callback: Direct Motors
 bool handleMotorRequest(float target_x_deg, float target_y_deg, float target_z, float target_a_deg) {
   if (isArmMoving()) return false;
@@ -197,7 +228,7 @@ bool handleMotorRequest(float target_x_deg, float target_y_deg, float target_z, 
     return false;
   }
   // Y-Axis check
-  if (target_y_deg < 130 || target_y_deg > 140) {
+  if (target_y_deg < -130 || target_y_deg > 140) {
     Serial.println("Angle error: Y target out of bounds!");
     return false;
   }
@@ -207,7 +238,7 @@ bool handleMotorRequest(float target_x_deg, float target_y_deg, float target_z, 
     return false;
   }
   // A-Axis check
-  if (target_a_deg < 160 || target_a_deg > 140) {
+  if (target_a_deg < -160 || target_a_deg > 140) {
     Serial.println("Angle error: A target out of bounds!");
     return false;
   }
@@ -344,6 +375,7 @@ void getCurrentCylinder(float &z_out, float &r_out, float &theta_deg_out) {
   float R2 = sq(L1) + sq(L2) - cos(PI - cur_y * PI / 180) * 2 * L1 * L2;
   float R = sqrt(R2);
   float theta_y = - acos((-sq(L2) + R2 + sq(L1)) / (2 * L1 * R));
+  if (cur_y < 0) theta_y = -theta_y;
   theta_deg_out = cur_a - theta_y * 180 / PI;
   r_out = R;
 
