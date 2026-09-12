@@ -16,7 +16,9 @@ void RobotNet::registerCallbacks(CylindricalMoveCallback cylCb,
                                  GetAnglesCallback getAnglesCb,
                                  GetCylinderCallback getCylinderCb,
                                  SphericalMoveCallback sphCb,
-                                 GetSphereCallback getSphereCb) {
+                                 GetSphereCallback getSphereCb,
+                                 CartesianMoveCallback cartCb,
+                                 GetCartesianCallback getCartesianCb) {
   onCylindricalMove = cylCb;
   onMotorMove = motorCb;
   onStepsMove = stepsCb;
@@ -26,6 +28,8 @@ void RobotNet::registerCallbacks(CylindricalMoveCallback cylCb,
   onGetCylinder = getCylinderCb;
   onSphericalMove = sphCb;
   onGetSphere = getSphereCb;
+  onCartesianMove = cartCb;
+  onGetCartesian = getCartesianCb;
 }
 
 void RobotNet::begin(const char* ssid, const char* password) {
@@ -101,6 +105,35 @@ void RobotNet::setupRoutes() {
       int elbow = doc.containsKey("elbow") ? doc["elbow"].as<int>() : 0;
 
       if (onSphericalMove && onSphericalMove(r, theta, fi, elbow)) {
+        request->send(200, "application/json", "{\"status\":\"accepted\"}");
+      } else {
+        request->send(422, "application/json", "{\"status\":\"error\", \"message\":\"Robot busy or limit exceeded\"}");
+      }
+    }
+  );
+
+  // --- Route: Cartesian Move ---
+  server.on("/move/cartesian", HTTP_POST, [](AsyncWebServerRequest *request){}, NULL,
+    [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+      StaticJsonDocument<256> doc;
+      DeserializationError err = deserializeJson(doc, (char*)data);
+
+      if (err) {
+        request->send(400, "application/json", "{\"status\":\"error\", \"message\":\"Invalid JSON\"}");
+        return;
+      }
+
+      if (!doc.containsKey("x") || !doc.containsKey("y") || !doc.containsKey("z")) {
+        request->send(400, "application/json", "{\"status\":\"error\", \"message\":\"Missing parameters (x, y, z)\"}");
+        return;
+      }
+
+      float x = doc["x"];
+      float y = doc["y"];
+      float z = doc["z"];
+      int elbow = doc.containsKey("elbow") ? doc["elbow"].as<int>() : 0;
+
+      if (onCartesianMove && onCartesianMove(x, y, z, elbow)) {
         request->send(200, "application/json", "{\"status\":\"accepted\"}");
       } else {
         request->send(422, "application/json", "{\"status\":\"error\", \"message\":\"Robot busy or limit exceeded\"}");
@@ -222,6 +255,22 @@ void RobotNet::setupRoutes() {
     res["radius"] = radius;
     res["azimuth"] = azimuth;
     res["polar"] = polar;
+
+    String response;
+    serializeJson(res, response);
+    request->send(200, "application/json", response);
+  });
+
+  server.on("/position/cartesian", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    float x = 0, y = 0, z = 0;
+    if (onGetCartesian) {
+      onGetCartesian(x, y, z);
+    }
+
+    StaticJsonDocument<256> res;
+    res["x"] = x;
+    res["y"] = y;
+    res["z"] = z;
 
     String response;
     serializeJson(res, response);

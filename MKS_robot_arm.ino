@@ -37,7 +37,7 @@ const float STEPS_PER_MM_Z = STEPS_PER_ROTATION * GEAR_RATIO_Z;
 const float STEPS_PER_DEG_Y = (STEPS_PER_ROTATION * GEAR_RATIO_Y) / 360.0;
 const float STEPS_PER_DEG_X = (STEPS_PER_ROTATION * GEAR_RATIO_X) / 360.0;
 
-const float MIN_HEIGHT = 0.0;
+const float MIN_HEIGHT = 5.0;
 const float MAX_HEIGHT = 170.0;
 const float MIN_REACH = 150;  // limited by Y angle range and construction
 const float MAX_REACH = abs(L1 + L2);
@@ -65,6 +65,7 @@ volatile MotionCommand pendingMove;
 void runSimultaneousHoming();
 bool handleCylindricalRequest(float target_z, float target_r, float target_theta_deg, int elbow_mode);
 bool handleSphericalRequest(float target_r, float target_theta_deg, float target_fi_deg, int elbow_mode);
+bool handleCartesianRequest(float target_x, float target_y, float target_z, int elbow_mode);
 bool handleMotorRequest(float target_x_deg, float target_y_deg, float target_z, float target_a_deg);
 bool calculateSteps(float target_x_deg, float target_y_deg, float target_z, float target_a_deg, long outSteps[4]);
 void getRobotStatus(long &z, long &a, long &y, long &x, bool &isBusy);
@@ -73,6 +74,7 @@ void getCurrentSteps(long &x, long &y, long &z, long &a);
 void getCurrentAngles(float &x, float &y, float &z, float &a);
 void getCurrentCylinder(float &z, float &r, float &theta_deg);
 void getCurrentSphere(float &r_out, float &theta_deg_out, float &fi_deg_out);
+void getCurrentCartesian(float &x_out, float &y_out, float &z_out);
 
 void setup()
 {
@@ -99,7 +101,7 @@ void setup()
   delay(500);
 
   // Link callbacks
-  robotNet.registerCallbacks(handleCylindricalRequest, handleMotorRequest, handleStepsRequest, getRobotStatus, getCurrentSteps, getCurrentAngles, getCurrentCylinder, handleSphericalRequest, getCurrentSphere);
+  robotNet.registerCallbacks(handleCylindricalRequest, handleMotorRequest, handleStepsRequest, getRobotStatus, getCurrentSteps, getCurrentAngles, getCurrentCylinder, handleSphericalRequest, getCurrentSphere, handleCartesianRequest, getCurrentCartesian);
   robotNet.begin(WIFI_SSID, WIFI_PASS);
 }
 
@@ -199,6 +201,8 @@ bool handleCylindricalRequest(float target_z, float target_r, float target_theta
 }
 
 bool handleSphericalRequest(float target_r, float target_theta_deg, float target_fi_deg, int elbow_mode) {
+  if (isArmMoving()) return false; // Reject if already executing a move
+  
   if ((target_fi_deg < 42) || (target_fi_deg > 89)) {
     Serial.print("Polar angle is out of bounds! "); Serial.println(target_fi_deg);
     return false;
@@ -214,9 +218,40 @@ bool handleSphericalRequest(float target_r, float target_theta_deg, float target
   float R = abs(target_r * sin(target_fi_deg * PI / 180.0)); // planar radius - always positive
   float azimuth = target_theta_deg;
   float height = sqrt(sq(target_r) - sq(R));
-  //Serial.print("Cylindrical target R "); Serial.println(R);
-  //Serial.print("Spherical target fi "); Serial.println(target_fi_deg);
+
   return handleCylindricalRequest(height, R, azimuth, elbow_mode);
+}
+
+bool handleCartesianRequest(float target_x, float target_y, float target_z, int elbow_mode) {
+  if (isArmMoving()) return false; // Reject if already executing a move
+
+  if (target_x < -345 || target_x > MAX_REACH) {
+    Serial.print("X is out of bounds! "); Serial.println(target_x);
+    return false;
+  }
+  if (target_y < -MAX_REACH || target_y > MAX_REACH) {
+    Serial.print("Y is out of bounds! "); Serial.println(target_y);
+    return false;
+  }
+  if (target_z < MIN_HEIGHT || target_z > MAX_HEIGHT) {
+    Serial.print("Z is out of bounds! "); Serial.println(target_z);
+    return false;
+  }
+  float azimuth = atan2(target_y, target_x);
+  float radius = sqrt(sq(target_x) + sq(target_y));
+//  if (abs(target_x) > 5) {
+//    azimuth = asin(target_y / target_x);
+//    radius = abs(target_x / cos(azimuth));
+//  }
+//  else if (abs(target_y) > 5) {
+//    azimuth = acos(target_x / target_y);
+//    radius = abs(target_y / sin(azimuth));
+//  }
+//  else return false;
+  //Serial.print("Azimuth: "); Serial.println(azimuth);
+  
+  azimuth = azimuth * 180.0 / PI;
+  return handleCylindricalRequest(target_z, radius, azimuth, elbow_mode);
 }
 
 // Network Callback: Direct Motors
@@ -234,8 +269,8 @@ bool handleMotorRequest(float target_x_deg, float target_y_deg, float target_z, 
     return false;
   }
   // Z-Axis check
-  if (target_z < 5 || target_z > 170) {
-    Serial.println("Angle error: Z target out of bounds!");
+  if (target_z < MIN_HEIGHT || target_z > MAX_HEIGHT) {
+    Serial.println("Height error: Z target out of bounds!");
     return false;
   }
   // A-Axis check
@@ -388,4 +423,13 @@ void getCurrentSphere(float &r_out, float &theta_deg_out, float &fi_deg_out) {
   r_out = sqrt(sq(cur_height) + sq(cur_radius));
   theta_deg_out = cur_azimuth;
   fi_deg_out = asin(cur_radius / r_out) * 180.0 / PI;
+}
+
+void getCurrentCartesian(float &x_out, float &y_out, float &z_out) {
+  float cur_height, cur_radius, cur_azimuth;
+  getCurrentCylinder(cur_height, cur_radius, cur_azimuth);
+
+  x_out = cur_radius * cos(cur_azimuth * PI / 180.0);
+  y_out = cur_radius * sin(cur_azimuth * PI / 180.0);
+  z_out = cur_height;
 }

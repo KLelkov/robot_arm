@@ -31,6 +31,15 @@ def move_spherical(radius, azimuth, polar, elbow=0, wait=True):
         time.sleep(0.1) # brief pause to let movement register
         wait_until_idle()
 
+def move_cartesian(x, y, z, elbow=0, wait=True):
+    payload = {"x": x, "y": y, "z": z, "elbow": elbow}
+    res = requests.post(f"{ROBOT_IP}/move/cartesian", json=payload, timeout=2)
+    print(res.json())
+    
+    if wait:
+        time.sleep(0.1) # brief pause to let movement register
+        wait_until_idle()
+
 def move_angles(x, y, z, a, wait=True):
     payload = {"x": x, "y": y, "z": z, "a": a}
     res = requests.post(f"{ROBOT_IP}/move/motors", json=payload, timeout=2)
@@ -95,14 +104,27 @@ def get_sphere():
         print(f"Error fetching sphere coords: {e}")
         return None
 
+def get_cartesian():
+    url = f"{ROBOT_IP}/position/cartesian"
+    try:
+        res = requests.get(url, timeout=2)
+        steps = res.json()
+        print(f"Current cartesian coords -> X: {steps['x']:.1f}, Y: {steps['y']:.1f}, Z: {steps['z']:.1f}")
+        return steps
+    except Exception as e:
+        print(f"Error fetching cartesian coords: {e}")
+        return None
+
 # Example Usage:
 #move_steps(x=-5000, y=9720, z=30100, a=13804)
 #move_cylindrical(z=15, r=150, theta=0, elbow=0)
-#move_cylindrical(z=150, r=200, theta=-40, elbow=0)
-move_spherical(radius=230, azimuth=-50, polar=45, elbow=0)
-#move_angles(0, 70, 160, 140)
+#move_cylindrical(z=150, r=351, theta=-180, elbow=1)
+#move_spherical(radius=230, azimuth=-50, polar=45, elbow=0)
+#move_angles(0, -22, 160, -160)
+move_cartesian(x=-150, y=200, z=160, elbow=0)
 
 get_steps()
 get_angles()
 get_cylinder()
 get_sphere()
+get_cartesian()
