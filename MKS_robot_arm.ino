@@ -41,8 +41,8 @@ const float MIN_HEIGHT = 0.0;
 const float MAX_HEIGHT = 170.0;
 const float MIN_REACH = 150;  // limited by Y angle range and construction
 const float MAX_REACH = abs(L1 + L2);
-const float MAX_PLANAR = 136;
-const float MIN_PLANAR = -164;
+const float MAX_PLANAR = 165;
+const float MIN_PLANAR = -180;
 
 
 const float base_z = 170;
@@ -72,6 +72,7 @@ bool handleStepsRequest(long target_x, long target_y, long target_z, long target
 void getCurrentSteps(long &x, long &y, long &z, long &a);
 void getCurrentAngles(float &x, float &y, float &z, float &a);
 void getCurrentCylinder(float &z, float &r, float &theta_deg);
+void getCurrentSphere(float &r_out, float &theta_deg_out, float &fi_deg_out);
 
 void setup()
 {
@@ -98,7 +99,7 @@ void setup()
   delay(500);
 
   // Link callbacks
-  robotNet.registerCallbacks(handleCylindricalRequest, handleMotorRequest, handleStepsRequest, getRobotStatus, getCurrentSteps, getCurrentAngles, getCurrentCylinder, handleSphericalRequest);
+  robotNet.registerCallbacks(handleCylindricalRequest, handleMotorRequest, handleStepsRequest, getRobotStatus, getCurrentSteps, getCurrentAngles, getCurrentCylinder, handleSphericalRequest, getCurrentSphere);
   robotNet.begin(WIFI_SSID, WIFI_PASS);
 }
 
@@ -375,9 +376,16 @@ void getCurrentCylinder(float &z_out, float &r_out, float &theta_deg_out) {
   float R2 = sq(L1) + sq(L2) - cos(PI - cur_y * PI / 180) * 2 * L1 * L2;
   float R = sqrt(R2);
   float theta_y = - acos((-sq(L2) + R2 + sq(L1)) / (2 * L1 * R));
-  if (cur_y < 0) theta_y = -theta_y;
+  if (cur_y < 0) theta_y = -theta_y;  // adjust for left-sided elbow angle
   theta_deg_out = cur_a - theta_y * 180 / PI;
   r_out = R;
+}
 
-  return;
+void getCurrentSphere(float &r_out, float &theta_deg_out, float &fi_deg_out) {
+  float cur_height, cur_radius, cur_azimuth;
+  getCurrentCylinder(cur_height, cur_radius, cur_azimuth);
+
+  r_out = sqrt(sq(cur_height) + sq(cur_radius));
+  theta_deg_out = cur_azimuth;
+  fi_deg_out = asin(cur_radius / r_out) * 180.0 / PI;
 }

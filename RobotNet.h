@@ -11,6 +11,7 @@ typedef void (*StatusCallback)(long &z, long &a, long &y, long &x, bool &isBusy)
 typedef void (*GetStepsCallback)(long &x, long &y, long &z, long &a);
 typedef void (*GetAnglesCallback)(float &x, float &y, float &z, float &a);
 typedef void (*GetCylinderCallback)(float &height, float &reach, float &theta);
+typedef void (*GetSphereCallback)(float &radius, float &azimuth, float &polar);
 
 class RobotNet {
 public:
@@ -23,7 +24,8 @@ public:
                          GetStepsCallback getStepsCb,
                          GetAnglesCallback getAnglesCb,
                          GetCylinderCallback getCylinderCb,
-                         SphericalMoveCallback sphCb);
+                         SphericalMoveCallback sphCb,
+                         GetSphereCallback getSphereCb);
 
   void begin(const char* ssid, const char* password);
 
@@ -38,6 +40,7 @@ private:
   GetAnglesCallback onGetAngles = nullptr; 
   GetCylinderCallback onGetCylinder = nullptr;
   SphericalMoveCallback onSphericalMove = nullptr;
+  GetSphereCallback onGetSphere = nullptr;
 };
 
 #endif

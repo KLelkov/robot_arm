@@ -15,7 +15,8 @@ void RobotNet::registerCallbacks(CylindricalMoveCallback cylCb,
                                  GetStepsCallback getStepsCb,
                                  GetAnglesCallback getAnglesCb,
                                  GetCylinderCallback getCylinderCb,
-                                 SphericalMoveCallback sphCb) {
+                                 SphericalMoveCallback sphCb,
+                                 GetSphereCallback getSphereCb) {
   onCylindricalMove = cylCb;
   onMotorMove = motorCb;
   onStepsMove = stepsCb;
@@ -24,6 +25,7 @@ void RobotNet::registerCallbacks(CylindricalMoveCallback cylCb,
   onGetAngles = getAnglesCb;
   onGetCylinder = getCylinderCb;
   onSphericalMove = sphCb;
+  onGetSphere = getSphereCb;
 }
 
 void RobotNet::begin(const char* ssid, const char* password) {
@@ -204,6 +206,22 @@ void RobotNet::setupRoutes() {
     res["height"] = height;
     res["reach"] = reach;
     res["theta"] = theta;
+
+    String response;
+    serializeJson(res, response);
+    request->send(200, "application/json", response);
+  });
+
+  server.on("/position/sphere", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    float radius = 0, azimuth = 0, polar = 0;
+    if (onGetSphere) {
+      onGetSphere(radius, azimuth, polar);
+    }
+
+    StaticJsonDocument<256> res;
+    res["radius"] = radius;
+    res["azimuth"] = azimuth;
+    res["polar"] = polar;
 
     String response;
     serializeJson(res, response);

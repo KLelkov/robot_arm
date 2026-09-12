@@ -84,13 +84,25 @@ def get_cylinder():
         print(f"Error fetching cylinder coords: {e}")
         return None
 
+def get_sphere():
+    url = f"{ROBOT_IP}/position/sphere"
+    try:
+        res = requests.get(url, timeout=2)
+        steps = res.json()
+        print(f"Current sphere coords -> Radius: {steps['radius']:.2f}, Azimuth: {steps['azimuth']:.2f}, Polar: {steps['polar']:.2f}")
+        return steps
+    except Exception as e:
+        print(f"Error fetching sphere coords: {e}")
+        return None
+
 # Example Usage:
 #move_steps(x=-5000, y=9720, z=30100, a=13804)
 #move_cylindrical(z=15, r=150, theta=0, elbow=0)
 #move_cylindrical(z=150, r=200, theta=-40, elbow=0)
-#move_spherical(radius=230, azimuth=-50, polar=45, elbow=0)
-move_angles(0, 70, 160, 140)
+move_spherical(radius=230, azimuth=-50, polar=45, elbow=0)
+#move_angles(0, 70, 160, 140)
 
 get_steps()
 get_angles()
 get_cylinder()
+get_sphere()
