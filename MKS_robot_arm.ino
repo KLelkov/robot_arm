@@ -183,19 +183,58 @@ bool handleCylindricalRequest(float target_z, float target_r, float target_theta
   float thetaY_deg = acos(cos_thetaY) * 180.0 / PI;
   thetaY_deg = -thetaY_deg;
 
-  if (elbow_mode == 1) {
-    thetaY_deg = -thetaY_deg;
-    thetaX_deg = -thetaX_deg;
-  }
   float thetaA_deg = target_theta_deg + thetaY_deg; 
+  
+  long steps_right[4], steps_left[4];
+  bool valid_right = calculateSteps(0, thetaX_deg, target_z, thetaA_deg, steps_right);
+  bool valid_left = calculateSteps(0, -thetaX_deg, target_z, target_theta_deg - thetaY_deg, steps_left);
 
-  long steps[4];
-  if (!calculateSteps(0, thetaX_deg, target_z, thetaA_deg, steps)) {
+  if (elbow_mode == 1) { // left
+    // positive value corresponds to the elbow pointing positive half of the field
+    if (!valid_left) return false;  // respect the user's choice
+    for (int i = 0; i < NUM_MOTORS; i++) pendingMove.targetSteps[i] = steps_left[i];
+    pendingMove.newCommand = true;
+    return true;
+  }
+  else if (elbow_mode == -1) { // right
+    // negative value corresponds to the elbow pointing negative half of the field
+    if (!valid_right) return false;  // respect the user's choice
+    for (int i = 0; i < NUM_MOTORS; i++) pendingMove.targetSteps[i] = steps_right[i];
+    pendingMove.newCommand = true;
+    return true;
+  }
+
+  // Automatic selector for user position
+  if (!valid_left && !valid_right) {
+    Serial.println("No valid position could be found!");
     return false;
   }
 
+  bool use_config_right = false;
+  if (valid_right && !valid_left) {  // only right config is valid
+    use_config_right = true;
+  }
+  else if (!valid_right && valid_left){  // only left config is valid
+    use_config_right = false;
+  }
+  else {  // both configurations are valid - compute the effciency
+    long current_steps_x = steppers[0]->getCurrentPosition();
+    long current_steps_y = steppers[1]->getCurrentPosition();
+    long current_steps_z = steppers[2]->getCurrentPosition();
+    long current_steps_a = steppers[3]->getCurrentPosition();
+
+    long cost_left = abs(steps_left[0] - current_steps_x) + abs(steps_left[1] - current_steps_y) +
+                     abs(steps_left[2] - current_steps_z) + abs(steps_left[3] - current_steps_a);
+
+    long cost_right = abs(steps_right[0] - current_steps_x) + abs(steps_right[1] - current_steps_y) +
+                     abs(steps_right[2] - current_steps_z) + abs(steps_right[3] - current_steps_a);
+
+    use_config_right = (cost_right <= cost_left);
+  }
+
+  long* chosen_steps = use_config_right ? steps_right : steps_left;
   // Queue to loop()
-  for (int i = 0; i < NUM_MOTORS; i++) pendingMove.targetSteps[i] = steps[i];
+  for (int i = 0; i < NUM_MOTORS; i++) pendingMove.targetSteps[i] = chosen_steps[i];
   pendingMove.newCommand = true;
   return true;
 }

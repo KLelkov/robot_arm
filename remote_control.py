@@ -121,7 +121,7 @@ def get_cartesian():
 #move_cylindrical(z=150, r=351, theta=-180, elbow=1)
 #move_spherical(radius=230, azimuth=-50, polar=45, elbow=0)
 #move_angles(0, -22, 160, -160)
-move_cartesian(x=-150, y=200, z=160, elbow=0)
+move_cartesian(x=250, y=50, z=160, elbow=-1)
 
 get_steps()
 get_angles()
