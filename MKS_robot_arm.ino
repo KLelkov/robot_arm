@@ -17,7 +17,7 @@ const float L1 = 226.0;
 const float L2 = 135.0;
 const float TIP_RADIUS = 38.8;
 
-const float GEAR_RATIO_A = 19.055; // True
+const float GEAR_RATIO_A = 19.2025; // True
 const float GEAR_RATIO_Z = 0.124; // True
 const float GEAR_RATIO_Y = 16.071; // True
 const float GEAR_RATIO_X = 4.61;
@@ -332,7 +332,7 @@ bool handleStepsRequest(long target_x, long target_y, long target_z, long target
   if (isArmMoving()) return false;
   
   // X-Axis check
-  if (target_x > 0 || target_x < 5000) {
+  if (target_x > 0 || target_x < -5000) {
     Serial.println("Step error: X target out of bounds!");
     return false;
   }

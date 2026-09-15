@@ -116,12 +116,12 @@ def get_cartesian():
         return None
 
 # Example Usage:
-#move_steps(x=-5000, y=9720, z=30100, a=13804)
+#move_steps(x=-2048, y=9714, z=30700, a=22000)
 #move_cylindrical(z=15, r=150, theta=0, elbow=0)
-#move_cylindrical(z=150, r=351, theta=-180, elbow=1)
+#move_cylindrical(z=20, r=200, theta=30, elbow=-1)
 #move_spherical(radius=230, azimuth=-50, polar=45, elbow=0)
-#move_angles(0, -22, 160, -160)
-move_cartesian(x=250, y=50, z=160, elbow=-1)
+#move_angles(0, -90, 10, 0)
+move_cartesian(x=-200, y=200, z=20, elbow=0)
 
 get_steps()
 get_angles()
